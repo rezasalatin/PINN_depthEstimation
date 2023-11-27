@@ -141,20 +141,20 @@ class PhysicsInformedNN:
         # This function defines the physics-informed neural network for the NSWE (Navier-Stokes Wave Equation).
 
         # Pass inputs through neural network to get predictions for u, v, and e.
-        uve = self.neural_net(tf.concat([x, y, h, t], 1), self.weights, self.biases)
-        u, v, e = uve[:, 0:1], uve[:, 1:2], uve[:, 2:3]
+        uvz = self.neural_net(tf.concat([x, y, h, t], 1), self.weights, self.biases)
+        u, v, z = uvz[:, 0:1], uvz[:, 1:2], uvz[:, 2:3]
 
         # Calculate temporal and spatial gradients for u, v, and z.
         u_t, u_x, u_y = [tf.gradients(u, var)[0] for var in [t, x, y]]
         v_t, v_x, v_y = [tf.gradients(v, var)[0] for var in [t, x, y]]
-        z_t, z_x, z_y = [tf.gradients(e, var)[0] for var in [t, x, y]]
+        z_t, z_x, z_y = [tf.gradients(z, var)[0] for var in [t, x, y]]
 
         # Define the physics-informed functions f_u, f_v, and f_c based on the gradients and equations.
         f_u = u_t + (u * u_x + v * u_y) + 9.81 * (z_x + z_y)
         f_v = v_t + (u * v_x + v * v_y) + 9.81 * (z_x + z_y)
-        f_c = z_t + (u * z_x + v * z_y) + (h + e) * (u_x + v_y)
+        f_c = z_t + (u * z_x + v * z_y) + (h + z) * (u_x + v_y)
 
-        return u, v, e, f_u, f_v, f_c
+        return u, v, z, f_u, f_v, f_c
 
     def callback(self, loss):
         # Callback function to print the loss during training.
@@ -200,6 +200,7 @@ class PhysicsInformedNN:
         return u_star, v_star, z_star, f_u_star, f_v_star, f_c_star
 
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 ################################ Main ################################
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
@@ -208,13 +209,14 @@ if __name__ == "__main__":
     # The main execution block of the script.
 
     # Number of training points on domain.
-    N_train = 500
+    N_train = 50
 
-    # Neural network configuration: 4 inputs, 8 hidden layers with 20 nodes each, 3 outputs.
+    # Neural network configuration: inputs, hidden layers with multiple nodes each, and outputs.
+    #         i  1   2   3   4   5   6   7   8   o
     layers = [4, 20, 20, 20, 20, 20, 20, 20, 20, 3]
 
     # Load data from a .mat file.
-    data = scipy.io.loadmat('../Data/NSWE.mat')
+    data = scipy.io.loadmat('../data/NSWE.mat')
 
     # Extracting and rearranging data for input into the neural network.
     U_star, Z_star = data['UV'], data['Z']  # Velocity components and eta.
@@ -253,4 +255,4 @@ if __name__ == "__main__":
     error_u, error_v, error_z = np.linalg.norm(u_star-u_pred,2)/np.linalg.norm(u_star,2), np.linalg.norm(v_star-v_pred,2)/np.linalg.norm(v_star,2), np.linalg.norm(z_star-z_pred,2)/np.linalg.norm(z_star,2)
     print('Error u: %e' % error_u)
     print('Error v: %e' % error_v)
-    print('Error e: %e' % error_z)
+    print('Error z: %e' % error_z)
