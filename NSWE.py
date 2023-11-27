@@ -4,7 +4,7 @@ PINN for reconstructing UV field with nonlinear shallow water equations and lab 
 November 2023
 """
 
-import sys
+import sys                                                  # This import statement is used to access system-specific parameters and functions in Python.
 import tensorflow as tf                                     # building/training neural networks in machine learning and deep learning.
 import numpy as np                                          # numerical operations with large, multi-dimensional arrays and matrices.
 import matplotlib.pyplot as plt                             # plotting graphs and visualizing data.
@@ -17,10 +17,9 @@ import time                                                 # accessing time-rel
 import matplotlib.gridspec as gridspec                      # creating grid layouts for subplots in Matplotlib.
 from mpl_toolkits.axes_grid1 import make_axes_locatable     # dividing axes in Matplotlib plots to place colorbars.
 
-sys.path.insert(0, '../utilities/')     # Adds '../data/' to the beginning of the system path list for module import resolution.
-
-np.random.seed(1234)        # Sets a fixed seed for NumPy's random number generation, ensuring reproducibility.
-tf.set_random_seed(1234)    # Sets a fixed seed for TensorFlow's random number generation, ensuring consistent results in machine learning models.
+sys.path.insert(0, '../utilities/')                         # Adds '../utilities/' to the beginning of the system path list for module import resolution.
+np.random.seed(1234)                                        # Sets a fixed seed for NumPy's random number generation, ensuring reproducibility.
+tf.set_random_seed(1234)                                    # Sets a fixed seed for TensorFlow's random number generation, ensuring consistent results in machine learning models.
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
 ################################ PINN ################################
@@ -46,8 +45,8 @@ class PhysicsInformedNN:
         self.weights, self.biases = self.initialize_NN(layers)
 
         # TensorFlow placeholders for feeding data into the network.
-        self.x_tf, self.y_tf, self.h_tf, self.t_tf = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.x, self.y, self.h, self.t]]
-        self.u_tf, self.v_tf, self.z_tf = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.u, self.v, self.z]]
+        self.x_tf, self.y_tf, self.h_tf, self.t_tf  = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.x, self.y, self.h, self.t]]
+        self.u_tf, self.v_tf, self.z_tf             = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.u, self.v, self.z]]
 
         # Define the neural network function and predicted outputs.
         self.u_pred, self.v_pred, self.z_pred, self.f_u_pred, self.f_v_pred, self.f_c_pred = self.net_NSWE(self.x_tf, self.y_tf, self.h_tf, self.t_tf)
