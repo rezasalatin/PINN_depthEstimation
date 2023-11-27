@@ -212,8 +212,8 @@ if __name__ == "__main__":
     N_train = 50
 
     # Neural network configuration: inputs, hidden layers with multiple nodes each, and outputs.
-    #         i  1   2   3   4   5   6   7   8   o
-    layers = [4, 20, 20, 20, 20, 20, 20, 20, 20, 3]
+    # info    i  1   2   3   4   5   6   7   8   o  (input, hidden layer #, and output)
+    layers = [4, 20, 20, 20, 20, 20, 20, 20, 20, 3] # number of parameters/weights
 
     # Load data from a .mat file.
     data = scipy.io.loadmat('../data/NSWE.mat')
@@ -242,6 +242,11 @@ if __name__ == "__main__":
     elapsed = time.time() - start_time                    
     print('Training time: %.4f' % elapsed)
 
+    # Save the model
+    saver = tf.train.Saver()
+    save_path = saver.save(model.sess, "./model.ckpt")
+    print("Model saved in path: %s" % save_path)
+
     ############################## Testing Data ##########################
     # Setting up testing data for model evaluation.
     snap = np.array([100])
@@ -250,6 +255,14 @@ if __name__ == "__main__":
 
     # Making predictions using the trained model.
     u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.predict(x_star, y_star, h_star, t_star)
+
+    # Save the testing locations and prediction results
+    np.save('./x_test.npy', x_star)
+    np.save('./y_test.npy', y_star)
+    np.save('./u_pred.npy', u_pred)
+    np.save('./v_pred.npy', v_pred)
+    np.save('./z_pred.npy', z_pred)
+
 
     # Calculating errors between predictions and actual data.
     error_u, error_v, error_z = np.linalg.norm(u_star-u_pred,2)/np.linalg.norm(u_star,2), np.linalg.norm(v_star-v_pred,2)/np.linalg.norm(v_star,2), np.linalg.norm(z_star-z_pred,2)/np.linalg.norm(z_star,2)
