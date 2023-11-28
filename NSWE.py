@@ -214,22 +214,22 @@ if __name__ == "__main__":
     layers = [4, 20, 20, 20, 20, 20, 20, 20, 20, 3] # number of parameters/weights
 
     # Load data from a .mat file.
-    data = scipy.io.loadmat('../data/exp.mat')
+    data = scipy.io.loadmat('../data/beach_2d.mat')
 
     # Extracting and rearranging data for input into the neural network.
-    t_star = data['t']                                          # Time,
-    X_star, Y_star, h_star = data['X'], data['Y'], data['h']    # Spatial coordinates and water depth.
-    U_star, V_star, Z_star = data['U'], data['V'], data['Z']    # Velocity and eta.
-    N, T = X_star.shape[0], t_star.shape[0]
+    t_in = data['t']                                            # Time,
+    x_in, y_in, h_in = data['x'], data['y'], data['h']          # Spatial coordinates and water depth.
+    u_in, v_in, z_in = data['u'], data['v'], data['z']          # Velocity and eta.
+    N, T = x_in.shape[0], t_in.shape[0]                         # Dimensions
 
     # Preprocessing and flattening data for neural network training.
-    TT = np.tile(t_star, (1,N)).T
-    XX, YY, hh = np.tile(X_star, (1,T)), np.tile(Y_star, (1,T)), np.tile(h_star, (1,T))
-    UU, VV, ZZ = np.tile(U_star, (1,T)), np.tile(V_star, (1,T)), np.tile(Z_star, (1,T))
+    tt = np.tile(t_in, (1,N)).T
+    xx, yy, hh = np.tile(x_in, (1,T)), np.tile(y_in, (1,T)), np.tile(h_in, (1,T))
+    uu, vv, zz = np.tile(u_in, (1,T)), np.tile(v_in, (1,T)), np.tile(z_in, (1,T))
 
-    t = TT.flatten()[:,None]
-    x, y, h = XX.flatten()[:,None], YY.flatten()[:,None], hh.flatten()[:,None]
-    u, v, z = UU.flatten()[:,None], VV.flatten()[:,None], ZZ.flatten()[:,None]
+    t = tt.flatten()[:,None]
+    x, y, h = xx.flatten()[:,None], yy.flatten()[:,None], hh.flatten()[:,None]
+    u, v, z = uu.flatten()[:,None], vv.flatten()[:,None], zz.flatten()[:,None]
 
     # Selecting a subset of data for training.
     idx = np.random.choice(N*T, N_train, replace=False)
@@ -252,23 +252,22 @@ if __name__ == "__main__":
     ############################## Testing Data ##########################
     # Setting up testing data for model evaluation.
     snap = np.array([100])
-    t_star = TT[:,snap]
-    x_star, y_star, h_star = X_star, Y_star, h_star
-    u_star, v_star, z_star = U_star[:,snap], V_star[:,snap], Z_star[:,snap]
+    t_test = tt[:,snap]
+    x_test, y_test, h_test = x_in, y_in, h_in
+    u_test, v_test, z_test = u_in[:,snap], v_in[:,snap], z_in[:,snap]
 
     # Making predictions using the trained model.
-    u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.predict(t_star, x_star, y_star, h_star)
+    u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.predict(t_test, x_test, y_test, h_test)
 
     # Save the testing locations and prediction results
-    np.save('./x_test.npy', x_star)
-    np.save('./y_test.npy', y_star)
+    np.save('./x_test.npy', x_test)
+    np.save('./y_test.npy', y_test)
     np.save('./u_pred.npy', u_pred)
     np.save('./v_pred.npy', v_pred)
     np.save('./z_pred.npy', z_pred)
 
-
     # Calculating errors between predictions and actual data.
-    error_u, error_v, error_z = np.linalg.norm(u_star-u_pred,2)/np.linalg.norm(u_star,2), np.linalg.norm(v_star-v_pred,2)/np.linalg.norm(v_star,2), np.linalg.norm(z_star-z_pred,2)/np.linalg.norm(z_star,2)
-    print('Error u: %e' % error_u)
-    print('Error v: %e' % error_v)
-    print('Error z: %e' % error_z)
+    u_err, v_err, z_err = np.linalg.norm(u_test-u_pred,2)/np.linalg.norm(u_test,2), np.linalg.norm(v_test-v_pred,2)/np.linalg.norm(v_test,2), np.linalg.norm(z_test-z_pred,2)/np.linalg.norm(z_test,2)
+    print('Error u: %e' % u_err)
+    print('Error v: %e' % v_err)
+    print('Error z: %e' % z_err)
