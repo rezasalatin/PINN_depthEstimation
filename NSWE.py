@@ -7,15 +7,15 @@ November 2023
 import sys                                                  # This import statement is used to access system-specific parameters and functions in Python.
 import tensorflow as tf                                     # building/training neural networks in machine learning and deep learning.
 import numpy as np                                          # numerical operations with large, multi-dimensional arrays and matrices.
-import matplotlib.pyplot as plt                             # plotting graphs and visualizing data.
+#import matplotlib.pyplot as plt                             # plotting graphs and visualizing data.
 import scipy.io                                             # reading and writing MATLAB files.
-from scipy.interpolate import griddata                      # interpolating data points on a grid.
-from pyDOE import lhs                                       # generating Latin Hypercube Samples for design of experiments.
-from plotting import newfig, savefig                        # creating and saving figures in a specific format.
-from mpl_toolkits.mplot3d import Axes3D                     # 3D plotting capabilities in Matplotlib.
+#from scipy.interpolate import griddata                      # interpolating data points on a grid.
+#from pyDOE import lhs                                       # generating Latin Hypercube Samples for design of experiments.
+#from plotting import newfig, savefig                        # creating and saving figures in a specific format.
+#from mpl_toolkits.mplot3d import Axes3D                     # 3D plotting capabilities in Matplotlib.
 import time                                                 # accessing time-related functions, like delays or time measurement.
-import matplotlib.gridspec as gridspec                      # creating grid layouts for subplots in Matplotlib.
-from mpl_toolkits.axes_grid1 import make_axes_locatable     # dividing axes in Matplotlib plots to place colorbars.
+#import matplotlib.gridspec as gridspec                      # creating grid layouts for subplots in Matplotlib.
+#from mpl_toolkits.axes_grid1 import make_axes_locatable     # dividing axes in Matplotlib plots to place colorbars.
 
 sys.path.insert(0, '../utilities/')                         # Adds '../utilities/' to the beginning of the system path list for module import resolution.
 np.random.seed(1234)                                        # Sets a fixed seed for NumPy's random number generation, ensuring reproducibility.
@@ -28,28 +28,27 @@ tf.set_random_seed(1234)                                    # Sets a fixed seed 
 class PhysicsInformedNN:
     # This class initializes a physics-informed neural network.
 
-    def __init__(self, x, y, h, t, u, v, z, layers):
+    def __init__(self, t, x, y, h, u, v, z, layers):
         # The constructor combines inputs into a single array, initializes network layers, weights, biases, and placeholders.
 
-        # Combine input features into a single array.
-        X = np.concatenate([x, y, h, t], 1)
-        self.X = X
-        # Separate features for individual access.
-        self.x, self.y, self.h, self.t = X[:,0:1], X[:,1:2], X[:,2:3], X[:,3:4]
-
-        # Outputs and parameters.
+        # inputs
+        self.t = t
+        self.x, self.y, self.h = x, y, h
+        # outputs
         self.u, self.v, self.z = u, v, z
+        # parameters
         self.layers = layers
 
         # Initialize neural network weights and biases.
         self.weights, self.biases = self.initialize_NN(layers)
 
         # TensorFlow placeholders for feeding data into the network.
-        self.x_tf, self.y_tf, self.h_tf, self.t_tf  = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.x, self.y, self.h, self.t]]
-        self.u_tf, self.v_tf, self.z_tf             = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.u, self.v, self.z]]
+        self.t_tf = [tf.placeholder(tf.float32, shape=[None, self.t.shape[1]])]
+        self.x_tf, self.y_tf, self.h_tf = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.x, self.y, self.h]]
+        self.u_tf, self.v_tf, self.z_tf = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.u, self.v, self.z]]
 
         # Define the neural network function and predicted outputs.
-        self.u_pred, self.v_pred, self.z_pred, self.f_u_pred, self.f_v_pred, self.f_c_pred = self.net_NSWE(self.x_tf, self.y_tf, self.h_tf, self.t_tf)
+        self.u_pred, self.v_pred, self.z_pred, self.f_u_pred, self.f_v_pred, self.f_c_pred = self.net_NSWE(self.t_tf, self.x_tf, self.y_tf, self.h_tf)
 
         # Loss function combining mean squared errors of (actuals - predictions) and residuals.
         self.loss = tf.reduce_mean(tf.square(self.u_tf - self.u_pred)) + \
@@ -137,11 +136,11 @@ class PhysicsInformedNN:
 
     ############################## Physics ##########################
 
-    def net_NSWE(self, x, y, h, t):
+    def net_NSWE(self, t, x, y, h):
         # This function defines the physics-informed neural network for the NSWE (Navier-Stokes Wave Equation).
 
         # Pass inputs through neural network to get predictions for u, v, and e.
-        uvz = self.neural_net(tf.concat([x, y, h, t], 1), self.weights, self.biases)
+        uvz = self.neural_net(tf.concat([t, x, y, h], 1), self.weights, self.biases)
         u, v, z = uvz[:, 0:1], uvz[:, 1:2], uvz[:, 2:3]
 
         # Calculate temporal and spatial gradients for u, v, and z.
@@ -167,7 +166,7 @@ class PhysicsInformedNN:
         # Function to train the neural network.
 
         # Define TensorFlow dictionary with input and output placeholders.
-        tf_dict = {self.x_tf: self.x, self.y_tf: self.y, self.t_tf: self.t, self.u_tf: self.u, self.v_tf: self.v, self.e_tf: self.e}
+        tf_dict = {self.t_tf: self.t, self.x_tf: self.x, self.y_tf: self.y, self.u_tf: self.u, self.v_tf: self.v, self.z_tf: self.z}
 
         # Training loop.
         start_time = time.time()
@@ -187,18 +186,17 @@ class PhysicsInformedNN:
 
     ############################## Predict ##########################
 
-    def predict(self, X_star):
+    def predict(self, t_star, x_star, y_star, h_star):
         # Function to make predictions using the trained model.
 
         # Define TensorFlow dictionary for prediction.
-        tf_dict = {self.x_tf: X_star[:, 0], self.y_tf: X_star[:, 1], self.t_tf: X_star[:, 2]}
+        tf_dict = {self.t_tf: t_star, self.x_tf: x_star, self.y_tf: y_star, self.h_tf: h_star}
 
         # Run the session to get predictions.
-        u_star, v_star, z_star = self.sess.run([self.u_pred, self.v_pred, self.e_pred], tf_dict)
+        u_star, v_star, z_star = self.sess.run([self.u_pred, self.v_pred, self.z_pred], tf_dict)
         f_u_star, f_v_star, f_c_star = self.sess.run([self.f_u_pred, self.f_v_pred, self.f_c_pred], tf_dict)
 
         return u_star, v_star, z_star, f_u_star, f_v_star, f_c_star
-
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%#
@@ -209,34 +207,38 @@ if __name__ == "__main__":
     # The main execution block of the script.
 
     # Number of training points on domain.
-    N_train = 50
+    N_train = 1000
 
     # Neural network configuration: inputs, hidden layers with multiple nodes each, and outputs.
     # info    i  1   2   3   4   5   6   7   8   o  (input, hidden layer #, and output)
     layers = [4, 20, 20, 20, 20, 20, 20, 20, 20, 3] # number of parameters/weights
 
     # Load data from a .mat file.
-    data = scipy.io.loadmat('../data/NSWE.mat')
+    data = scipy.io.loadmat('../data/exp.mat')
 
     # Extracting and rearranging data for input into the neural network.
-    U_star, Z_star = data['UV'], data['Z']  # Velocity components and eta.
-    t_star, X_star, h_star = data['t'], data['XY'], data['h']  # Time, spatial coordinates, and depth.
+    t_star = data['t']                                          # Time,
+    X_star, Y_star, h_star = data['X'], data['Y'], data['h']    # Spatial coordinates and water depth.
+    U_star, V_star, Z_star = data['U'], data['V'], data['Z']    # Velocity and eta.
     N, T = X_star.shape[0], t_star.shape[0]
 
     # Preprocessing and flattening data for neural network training.
-    XX, YY, hh = np.tile(X_star[:,0:1], (1,T)), np.tile(X_star[:,1:2], (1,T)), np.tile(h_star, (1,T))
     TT = np.tile(t_star, (1,N)).T
-    UU, VV, ZZ = U_star[:,0,:], U_star[:,1,:], Z_star
-    x, y, h, t = XX.flatten()[:,None], YY.flatten()[:,None], hh.flatten()[:,None], TT.flatten()[:,None]
+    XX, YY, hh = np.tile(X_star, (1,T)), np.tile(Y_star, (1,T)), np.tile(h_star, (1,T))
+    UU, VV, ZZ = np.tile(U_star, (1,T)), np.tile(V_star, (1,T)), np.tile(Z_star, (1,T))
+
+    t = TT.flatten()[:,None]
+    x, y, h = XX.flatten()[:,None], YY.flatten()[:,None], hh.flatten()[:,None]
     u, v, z = UU.flatten()[:,None], VV.flatten()[:,None], ZZ.flatten()[:,None]
 
     # Selecting a subset of data for training.
     idx = np.random.choice(N*T, N_train, replace=False)
-    x_train, y_train, h_train, t_train = x[idx,:], y[idx,:], h[idx,:], t[idx,:]
+    t_train = t[idx,:]
+    x_train, y_train, h_train = x[idx,:], y[idx,:], h[idx,:]
     u_train, v_train, z_train = u[idx,:], v[idx,:], z[idx,:]
 
     # Initializing and training the neural network model.
-    model = PhysicsInformedNN(x_train, y_train, h_train, t_train, u_train, v_train, z_train, layers)
+    model = PhysicsInformedNN(t_train, x_train, y_train, h_train, u_train, v_train, z_train, layers)
     start_time = time.time()   
     model.train(50000)
     elapsed = time.time() - start_time                    
@@ -250,11 +252,12 @@ if __name__ == "__main__":
     ############################## Testing Data ##########################
     # Setting up testing data for model evaluation.
     snap = np.array([100])
-    x_star, y_star, h_star, t_star = X_star[:,0:1], X_star[:,1:2], h_star, TT[:,snap]
-    u_star, v_star, z_star = U_star[:,0,snap], U_star[:,1,snap], Z_star[:,snap]
+    t_star = TT[:,snap]
+    x_star, y_star, h_star = X_star, Y_star, h_star
+    u_star, v_star, z_star = U_star[:,snap], V_star[:,snap], Z_star[:,snap]
 
     # Making predictions using the trained model.
-    u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.predict(x_star, y_star, h_star, t_star)
+    u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.predict(t_star, x_star, y_star, h_star)
 
     # Save the testing locations and prediction results
     np.save('./x_test.npy', x_star)
