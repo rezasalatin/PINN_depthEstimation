@@ -32,8 +32,7 @@ class PhysicsInformedNN:
         # The constructor combines inputs into a single array, initializes network layers, weights, biases, and placeholders.
 
         # inputs
-        self.t = t
-        self.x, self.y, self.h = x, y, h
+        self.t, self.x, self.y, self.h = t, x, y, h
         # outputs
         self.u, self.v, self.z = u, v, z
         # parameters
@@ -43,8 +42,7 @@ class PhysicsInformedNN:
         self.weights, self.biases = self.initialize_NN(layers)
 
         # TensorFlow placeholders for feeding data into the network.
-        self.t_tf = [tf.placeholder(tf.float32, shape=[None, self.t.shape[1]])]
-        self.x_tf, self.y_tf, self.h_tf = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.x, self.y, self.h]]
+        self.t_tf, self.x_tf, self.y_tf, self.h_tf = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.t, self.x, self.y, self.h]]
         self.u_tf, self.v_tf, self.z_tf = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.u, self.v, self.z]]
 
         # Define the neural network function and predicted outputs.
@@ -166,7 +164,7 @@ class PhysicsInformedNN:
         # Function to train the neural network.
 
         # Define TensorFlow dictionary with input and output placeholders.
-        tf_dict = {self.t_tf: self.t, self.x_tf: self.x, self.y_tf: self.y, self.u_tf: self.u, self.v_tf: self.v, self.z_tf: self.z}
+        tf_dict = {self.t_tf: self.t, self.x_tf: self.x, self.y_tf: self.y, self.h_tf: self.h, self.u_tf: self.u, self.v_tf: self.v, self.z_tf: self.z}
 
         # Training loop.
         start_time = time.time()
@@ -216,26 +214,37 @@ if __name__ == "__main__":
     # Load data from a .mat file.
     data = scipy.io.loadmat('../data/beach_2d.mat')
 
-    # Extracting and rearranging data for input into the neural network.
-    t_in = data['t']                                            # Time,
-    x_in, y_in, h_in = data['x'], data['y'], data['h']          # Spatial coordinates and water depth.
-    u_in, v_in, z_in = data['u'], data['v'], data['z']          # Velocity and eta.
-    N, T = x_in.shape[0], t_in.shape[0]                         # Dimensions
+    # Extract and flatten data.
+    t_all = data['t']                                           # Time, T x 1
+    x_all, y_all, h_all = data['x'], data['y'], data['h']       # Spatial coordinates and water depth, N x 1
+    u_all, v_all, z_all = data['u'], data['v'], data['z']       # Velocity and eta, N x T
+    N, T = x_all.shape[0], t_all.shape[0]                       # Dimensions
 
-    # Preprocessing and flattening data for neural network training.
-    tt = np.tile(t_in, (1,N)).T
-    xx, yy, hh = np.tile(x_in, (1,T)), np.tile(y_in, (1,T)), np.tile(h_in, (1,T))
-    uu, vv, zz = np.tile(u_in, (1,T)), np.tile(v_in, (1,T)), np.tile(z_in, (1,T))
-
-    t = tt.flatten()[:,None]
-    x, y, h = xx.flatten()[:,None], yy.flatten()[:,None], hh.flatten()[:,None]
-    u, v, z = uu.flatten()[:,None], vv.flatten()[:,None], zz.flatten()[:,None]
-
+    """
+    # Rearrange Data to 2D matrix
+    TT = np.tile(t_all, (1,N)).T    # N x T
+    XX = np.tile(x_all, (1,T))      # N x T
+    YY = np.tile(y_all, (1,T))      # N x T
+    HH = np.tile(h_all, (1,T))      # N x T
+    UU = u_all                      # N x T
+    VV = v_all                      # N x T
+    ZZ = z_all                      # N x T
+    
+    # Flatten data
+    t_all = TT.flatten()[:,None] # NT x 1
+    x_all = XX.flatten()[:,None] # NT x 1
+    y_all = YY.flatten()[:,None] # NT x 1
+    h_all = HH.flatten()[:,None] # NT x 1
+    u_all = UU.flatten()[:,None] # NT x 1
+    v_all = VV.flatten()[:,None] # NT x 1
+    z_all = ZZ.flatten()[:,None] # NT x 1
+    """
+    
     # Selecting a subset of data for training.
     idx = np.random.choice(N*T, N_train, replace=False)
-    t_train = t[idx,:]
-    x_train, y_train, h_train = x[idx,:], y[idx,:], h[idx,:]
-    u_train, v_train, z_train = u[idx,:], v[idx,:], z[idx,:]
+    t_train = t_all[idx,:]
+    x_train, y_train, h_train = x_all[idx,:], y_all[idx,:], h_all[idx,:]
+    u_train, v_train, z_train = u_all[idx,:], v_all[idx,:], z_all[idx,:]
 
     # Initializing and training the neural network model.
     model = PhysicsInformedNN(t_train, x_train, y_train, h_train, u_train, v_train, z_train, layers)
@@ -251,10 +260,13 @@ if __name__ == "__main__":
 
     ############################## Testing Data ##########################
     # Setting up testing data for model evaluation.
-    snap = np.array([100])
-    t_test = tt[:,snap]
-    x_test, y_test, h_test = x_in, y_in, h_in
-    u_test, v_test, z_test = u_in[:,snap], v_in[:,snap], z_in[:,snap]
+    snap_idx = 2  # Replace this with the desired value of n
+    start_r = snap_idx * 50
+    end_r = (snap_idx + 1) * 50
+    snap = np.arange(start_r, end_r)
+    t_test = t_all[:,snap]
+    x_test, y_test, h_test = x_all[:,snap], y_all[:,snap], h_all[:,snap]
+    u_test, v_test, z_test = u_all[:,snap], v_all[:,snap], z_all[:,snap]
 
     # Making predictions using the trained model.
     u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.predict(t_test, x_test, y_test, h_test)
