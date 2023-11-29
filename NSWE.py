@@ -8,7 +8,7 @@ import sys                                                  # This import statem
 import tensorflow as tf                                     # building/training neural networks in machine learning and deep learning.
 import numpy as np                                          # numerical operations with large, multi-dimensional arrays and matrices.
 #import matplotlib.pyplot as plt                             # plotting graphs and visualizing data.
-import scipy.io                                             # reading and writing MATLAB files.
+# import scipy.io                                             # reading and writing MATLAB files.
 #from scipy.interpolate import griddata                      # interpolating data points on a grid.
 #from pyDOE import lhs                                       # generating Latin Hypercube Samples for design of experiments.
 #from plotting import newfig, savefig                        # creating and saving figures in a specific format.
@@ -212,7 +212,9 @@ if __name__ == "__main__":
     layers = [4, 20, 20, 20, 20, 20, 20, 20, 20, 3] # number of parameters/weights
 
     # Load data from a .mat file.
-    data = scipy.io.loadmat('../data/beach_2d.mat')
+    # data = scipy.io.loadmat('../data/beach_2d.mat')
+    # Use numpy to load data from the CSV file
+    data = np.genfromtxt('../data/beach_2d.csv', delimiter=',')
 
     # Extract and flatten data.
     t_all = data['t']                                           # Time, T x 1
