@@ -217,9 +217,9 @@ if __name__ == "__main__":
     data = np.genfromtxt('../data/beach_2d.csv', delimiter=',')
 
     # Extract and flatten data.
-    t_all = data['t']                                           # Time, T x 1
-    x_all, y_all, h_all = data['x'], data['y'], data['h']       # Spatial coordinates and water depth, N x 1
-    u_all, v_all, z_all = data['u'], data['v'], data['z']       # Velocity and eta, N x T
+    t_all = data[:, 0]                                          # Time, T x 1
+    x_all, y_all, h_all = data[:, 1], data[:, 2], data[:, 3]    # Spatial coordinates and water depth, N x 1
+    u_all, v_all, z_all = data[:, 5], data[:, 6], data[:, 4]       # Velocity and eta, N x T
     N, T = x_all.shape[0], t_all.shape[0]                       # Dimensions
 
     """
