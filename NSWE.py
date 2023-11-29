@@ -42,8 +42,8 @@ class PhysicsInformedNN:
         self.weights, self.biases = self.initialize_NN(layers)
 
         # TensorFlow placeholders for feeding data into the network.
-        self.t_tf, self.x_tf, self.y_tf, self.h_tf = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.t, self.x, self.y, self.h]]
-        self.u_tf, self.v_tf, self.z_tf = [tf.placeholder(tf.float32, shape=[None, item.shape[1]]) for item in [self.u, self.v, self.z]]
+        self.t_tf, self.x_tf, self.y_tf, self.h_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for item in [self.t, self.x, self.y, self.h]]
+        self.u_tf, self.v_tf, self.z_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for item in [self.u, self.v, self.z]]
 
         # Define the neural network function and predicted outputs.
         self.u_pred, self.v_pred, self.z_pred, self.f_u_pred, self.f_v_pred, self.f_c_pred = self.net_NSWE(self.t_tf, self.x_tf, self.y_tf, self.h_tf)
@@ -271,9 +271,9 @@ if __name__ == "__main__":
     start_r = snap_idx * 50
     end_r = (snap_idx + 1) * 50
     snap = np.arange(start_r, end_r)
-    t_test = t_all[:,snap]
-    x_test, y_test, h_test = x_all[:,snap], y_all[:,snap], h_all[:,snap]
-    u_test, v_test, z_test = u_all[:,snap], v_all[:,snap], z_all[:,snap]
+    t_test = t_all[snap]
+    x_test, y_test, h_test = x_all[snap], y_all[snap], h_all[snap]
+    u_test, v_test, z_test = u_all[snap], v_all[snap], z_all[snap]
 
     # Making predictions using the trained model.
     u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.predict(t_test, x_test, y_test, h_test)
