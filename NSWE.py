@@ -214,7 +214,7 @@ if __name__ == "__main__":
     # Load data from a .mat file.
     # data = scipy.io.loadmat('../data/beach_2d.mat')
     # Use numpy to load data from the CSV file
-    data = np.genfromtxt('../data/beach_2d.csv', delimiter=',')
+    data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ')
 
     # Extract and flatten data.
     t_all = data[:, 0]                                          # Time, T x 1
@@ -243,7 +243,8 @@ if __name__ == "__main__":
     """
     
     # Selecting a subset of data for training.
-    idx = np.random.choice(N*T, N_train, replace=False)
+    #idx = np.random.choice(N*T, N_train, replace=False)
+    idx = np.random.choice(N, N_train, replace=False)
     t_train = t_all[idx,:]
     x_train, y_train, h_train = x_all[idx,:], y_all[idx,:], h_all[idx,:]
     u_train, v_train, z_train = u_all[idx,:], v_all[idx,:], z_all[idx,:]
