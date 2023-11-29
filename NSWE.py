@@ -249,9 +249,9 @@ if __name__ == "__main__":
     #u_train, v_train, z_train = u_all[idx,:], v_all[idx,:], z_all[idx,:]
     
     idx = np.random.choice(N, N_train, replace=False)
-    t_train = t_all[idx]
-    x_train, y_train, h_train = x_all[idx], y_all[idx], h_all[idx]
-    u_train, v_train, z_train = u_all[idx], v_all[idx], z_all[idx]
+    t_train = t_all[idx][:, None]
+    x_train, y_train, h_train = x_all[idx][:, None], y_all[idx][:, None], h_all[idx][:, None]
+    u_train, v_train, z_train = u_all[idx][:, None], v_all[idx][:, None], z_all[idx][:, None]
 
     # Initializing and training the neural network model.
     model = PhysicsInformedNN(t_train, x_train, y_train, h_train, u_train, v_train, z_train, layers)
@@ -271,9 +271,9 @@ if __name__ == "__main__":
     start_r = snap_idx * 50
     end_r = (snap_idx + 1) * 50
     snap = np.arange(start_r, end_r)
-    t_test = t_all[snap]
-    x_test, y_test, h_test = x_all[snap], y_all[snap], h_all[snap]
-    u_test, v_test, z_test = u_all[snap], v_all[snap], z_all[snap]
+    t_test = t_all[snap][:, None]
+    x_test, y_test, h_test = x_all[snap][:, None], y_all[snap][:, None], h_all[snap][:, None]
+    u_test, v_test, z_test = u_all[snap][:, None], v_all[snap][:, None], z_all[snap][:, None]
 
     # Making predictions using the trained model.
     u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.predict(t_test, x_test, y_test, h_test)
