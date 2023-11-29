@@ -244,10 +244,14 @@ if __name__ == "__main__":
     
     # Selecting a subset of data for training.
     #idx = np.random.choice(N*T, N_train, replace=False)
+    #t_train = t_all[idx,:]
+    #x_train, y_train, h_train = x_all[idx,:], y_all[idx,:], h_all[idx,:]
+    #u_train, v_train, z_train = u_all[idx,:], v_all[idx,:], z_all[idx,:]
+    
     idx = np.random.choice(N, N_train, replace=False)
-    t_train = t_all[idx,:]
-    x_train, y_train, h_train = x_all[idx,:], y_all[idx,:], h_all[idx,:]
-    u_train, v_train, z_train = u_all[idx,:], v_all[idx,:], z_all[idx,:]
+    t_train = t_all[idx]
+    x_train, y_train, h_train = x_all[idx], y_all[idx], h_all[idx]
+    u_train, v_train, z_train = u_all[idx], v_all[idx], z_all[idx]
 
     # Initializing and training the neural network model.
     model = PhysicsInformedNN(t_train, x_train, y_train, h_train, u_train, v_train, z_train, layers)
