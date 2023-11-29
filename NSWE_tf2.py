@@ -9,12 +9,15 @@ import sys
 import tensorflow as tf
 import numpy as np
 import time
+from l_bfgs_b_optimizer import LBFGSBOptimizer
 
 sys.path.insert(0, '../utilities/')
 np.random.seed(1234)
 tf.random.set_seed(1234)
 
-#### General access functions ####
+###############################################################################
+# General access functions ####################################################
+
 def custom_loss(model, inputs, outputs):
     u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.net_NSWE(inputs)
     # Split the outputs tensor into true_u, true_v, and true_z
@@ -34,18 +37,16 @@ def train_step(model, inputs, outputs, optimizer):
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
     return loss
 
-#%%%%%%%%%%%%%%%%%%#
-#### PINN Class ####
-#%%%%%%%%%%%%%%%%%%#
+###############################################################################
+# PINN Class ##################################################################
 
 class PhysicsInformedNN(tf.keras.Model):
     def __init__(self, layers):
         super(PhysicsInformedNN, self).__init__()
-
         self.dense_layers = [tf.keras.layers.Dense(layer, activation=tf.nn.tanh) 
                              for layer in layers[:-1]]
         self.output_layer = tf.keras.layers.Dense(layers[-1], activation=None)
-
+        
     def call(self, inputs):
         # Forward pass through the network
         x = inputs
@@ -53,7 +54,12 @@ class PhysicsInformedNN(tf.keras.Model):
             x = dense(x)
         return self.output_layer(x)
 
-#### Training ####
+# L-BFGS-B ####################################################################
+    def train_with_lbfgs(self, inputs, outputs):
+        lbfgs_optimizer = LBFGSBOptimizer(self, inputs, outputs, custom_loss, options={'maxiter': 50000, 'maxfun': 50000, 'maxcor': 50, 'maxls': 50, 'ftol' : 1.0 * np.finfo(float).eps})
+        lbfgs_optimizer.optimize()
+
+# Training ####################################################################
     # In the train method of the PhysicsInformedNN class
     def train(self, inputs, outputs, nIter):
         optimizer = tf.keras.optimizers.Adam()
@@ -64,13 +70,13 @@ class PhysicsInformedNN(tf.keras.Model):
                 print(f'Iteration {it}, Loss: {loss.numpy()}')
         # No need for a separate L-BFGS-B optimizer step in this simplified example
 
-#### Predict ####
+# Prediction ##################################################################
     def predict(self, inputs):
         # Make predictions using the model
         u, v, z, f_u, f_v, f_c = self.net_NSWE(inputs)
         return u, v, z, f_u, f_v, f_c
 
-#### Physics ####
+# Physics ##################################################################
     def net_NSWE(self, inputs):
 
         t, x, y, h = tf.split(inputs, num_or_size_splits=4, axis=-1)
@@ -100,23 +106,23 @@ class PhysicsInformedNN(tf.keras.Model):
 
         return u, v, z, f_u, f_v, f_c
 
-#### loss ####
+# Callback loss ###############################################################
     def callback(self, loss):
         # Callback function to print the loss during training.
         print('Loss:', loss.numpy())
 
 
-#%%%%%%%%%%%%#
-#### Main ####
-#%%%%%%%%%%%%#
+###############################################################################
+# Main ########################################################################
 
 if __name__ == "__main__": 
 
     N_train = 1000  # number of training points on domain.
+    nIter = 20 #50000
 
     layers = [4, 20, 20, 20, 20, 20, 20, 20, 20, 3] # number of parameters/weights
 
-    data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ') # load data
+    data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ').astype(np.float32) # load data
 
     # Extract and flatten data.
     t_all = data[:, 0]                                          # Time, T x 1
@@ -125,28 +131,32 @@ if __name__ == "__main__":
     N, T = x_all.shape[0], t_all.shape[0]                       # Dimensions
     
 
-    ############################## Training ##########################
+    # Training ################################################################
 
     idx = np.random.choice(N, N_train, replace=False)
     t_train = t_all[idx][:, None]
     x_train, y_train, h_train = x_all[idx][:, None], y_all[idx][:, None], h_all[idx][:, None]
     u_train, v_train, z_train = u_all[idx][:, None], v_all[idx][:, None], z_all[idx][:, None]
     inputs_train = tf.concat([t_train, x_train, y_train, h_train], axis=1)
-    outputs_train = [u_train, v_train, z_train]
+    outputs_train = tf.concat([u_train, v_train, z_train], axis=1)
 
     # Initializing and training the neural network model.
     model = PhysicsInformedNN(layers)
     start_time = time.time()   
-    model.train(inputs_train, outputs_train, nIter=50000)
+    
+    model.train(inputs_train, outputs_train, nIter)
+    # Use L-BFGS-B for further optimization
+    model.train_with_lbfgs(inputs_train, outputs_train)
+    
     elapsed = time.time() - start_time                    
     print('Training time: %.4f' % elapsed)
 
     # Save the model
-    model.save_weights('./model.ckpt')
+    model.save_weights('../log/model.ckpt')
     # to save entire model
     # model.save('./model')
 
-    ############################## Testing ##########################
+    # Testing #################################################################
     # Setting up testing data for model evaluation.
     snap_idx = 2  # Replace this with the desired value of n
     start_r = snap_idx * 50
@@ -161,14 +171,14 @@ if __name__ == "__main__":
     u_pred, v_pred, z_pred, f_u_pred, f_v_pred, f_c_pred = model.predict(inputs_test)
 
     # Save the testing locations and prediction results
-    np.save('./x_test.npy', x_test)
-    np.save('./y_test.npy', y_test)
-    np.save('./u_pred.npy', u_pred)
-    np.save('./v_pred.npy', v_pred)
-    np.save('./z_pred.npy', z_pred)
+    np.save('../log/x_test.npy', x_test)
+    np.save('../log/y_test.npy', y_test)
+    np.save('../log/u_pred.npy', u_pred)
+    np.save('../log/v_pred.npy', v_pred)
+    np.save('../log/z_pred.npy', z_pred)
 
     # Calculating errors between predictions and actual data.
-    u_err, v_err, z_err = np.linalg.norm(u_test-u_pred,2)/np.linalg.norm(u_test,2), np.linalg.norm(v_test-v_pred,2)/np.linalg.norm(v_test,2), np.linalg.norm(z_test-z_pred,2)/np.linalg.norm(z_test,2)
-    print('Error u: %e' % u_err)
-    print('Error v: %e' % v_err)
-    print('Error z: %e' % z_err)
+    #u_err, v_err, z_err = np.linalg.norm(u_test-u_pred,2)/np.linalg.norm(u_test,2), np.linalg.norm(v_test-v_pred,2)/np.linalg.norm(v_test,2), np.linalg.norm(z_test-z_pred,2)/np.linalg.norm(z_test,2)
+    #print('Error u: %e' % u_err)
+    #print('Error v: %e' % v_err)
+    #print('Error z: %e' % z_err)
