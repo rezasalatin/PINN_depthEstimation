@@ -25,7 +25,7 @@ else:
 ######################################################################
 class PINN(nn.Module):
 
-    ## init
+    ## initiate the class
 
     def __init__(self, layers):
 
@@ -44,42 +44,36 @@ class PINN(nn.Module):
             inputs = layer(inputs)
         return inputs
     
-    ## compute gradients
-    
-    def compute_gradient(self, variable, respect_to):
-
-        return torch.autograd.grad(variable, respect_to, grad_outputs=torch.ones_like(variable), create_graph=True)[0]
-    
-    ##
+    ## calculate loss with data and physics
     
     def loss_func(self, input_vals, true_vals, pred_vals):
-
+        
+        pred_vals = self(input_vals)
         t_in, x_in, y_in = input_vals[:, 0], input_vals[:, 1], input_vals[:, 2]
         h_true, z_true, u_true, v_true = true_vals[:, 0], true_vals[:, 1], true_vals[:, 2], true_vals[:, 3]
         h_pred, z_pred, u_pred, v_pred = pred_vals[:, 0], pred_vals[:, 1], pred_vals[:, 2], pred_vals[:, 3]
 
-        # Data fidelity loss
-        loss_data_fidelity = torch.mean((u_true - u_pred)**2) + \
-                            torch.mean((v_true - v_pred)**2) + \
-                            torch.mean((z_true - z_pred)**2)
-        
-        # Gradients for physics
-        u_t = self.compute_gradient(u_pred, t_in)
-        u_x = self.compute_gradient(u_pred, x_in)
-        u_y = self.compute_gradient(u_pred, y_in)
-        v_t = self.compute_gradient(v_pred, t_in)
-        v_x = self.compute_gradient(v_pred, x_in)
-        v_y = self.compute_gradient(v_pred, y_in)
-        z_t = self.compute_gradient(z_pred, t_in)
-        z_x = self.compute_gradient(z_pred, x_in)
-        z_y = self.compute_gradient(z_pred, y_in)
+        # loss with data
+        loss_data_fidelity = torch.mean((h_true - h_pred)**2) + \
+            torch.mean((z_true - z_pred)**2) + \
+            torch.mean((u_true - u_pred)**2) + \
+            torch.mean((v_true - v_pred)**2)
 
-        # Residuals of NSWE equations
+        # gradients
+        u_t = torch.autograd.grad(u_pred, t_in, grad_outputs=torch.ones_like(u_pred), create_graph=True)[0]
+        u_x = torch.autograd.grad(u_pred, x_in, grad_outputs=torch.ones_like(u_pred), create_graph=True)[0]
+        u_y = torch.autograd.grad(u_pred, y_in, grad_outputs=torch.ones_like(u_pred), create_graph=True)[0]
+        v_t = torch.autograd.grad(v_pred, t_in, grad_outputs=torch.ones_like(v_pred), create_graph=True)[0]
+        v_x = torch.autograd.grad(v_pred, x_in, grad_outputs=torch.ones_like(v_pred), create_graph=True)[0]
+        v_y = torch.autograd.grad(v_pred, y_in, grad_outputs=torch.ones_like(v_pred), create_graph=True)[0]
+        z_t = torch.autograd.grad(z_pred, t_in, grad_outputs=torch.ones_like(z_pred), create_graph=True)[0]
+        z_x = torch.autograd.grad(z_pred, x_in, grad_outputs=torch.ones_like(z_pred), create_graph=True)[0]
+        z_y = torch.autograd.grad(z_pred, y_in, grad_outputs=torch.ones_like(z_pred), create_graph=True)[0]
+
+        # loss with physics
         f_u = u_t + (u_pred * u_x + v_pred * u_y) + 9.81 * (z_x + z_y)
         f_v = v_t + (u_pred * v_x + v_pred * v_y) + 9.81 * (z_x + z_y)
-        f_c = z_t + (u_pred * z_x + v_pred * z_y) + (h_in + z_pred) * (u_x + v_y)
-
-        # Physics-based constraint loss
+        f_c = z_t + (u_pred * z_x + v_pred * z_y) + (h_pred + z_pred) * (u_x + v_y)
         loss_physics_constraints = torch.mean(f_u**2) + torch.mean(f_v**2) + torch.mean(f_c**2)
 
         # Total loss
@@ -87,7 +81,7 @@ class PINN(nn.Module):
 
         return loss
     
-    ##
+    ## train the model
     
     def train(self, train_data, nIter):
 
@@ -107,8 +101,7 @@ class PINN(nn.Module):
                 true_vals = torch.cat((h_train, z_train, u_train, v_train), dim=1)
 
                 optimizer_adam.zero_grad()
-                pred_vals = self(inputs)
-                loss = self.loss_func(inputs, true_vals, pred_vals)
+                loss = self.loss_func(inputs, true_vals)
                 loss.backward()
                 optimizer_adam.step()
                 
@@ -137,7 +130,7 @@ class PINN(nn.Module):
                 optimizer_lbfgs.step()
                 print(f'Iter {it}, Loss: {loss.item()}')            
    
-    ##
+    ## test the model
    
     def test(self, test_data):
         model.eval()
