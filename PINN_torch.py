@@ -14,8 +14,6 @@ import time
 # random see for numpy
 np.random.seed(1234)
 
-print('hello')
-
 # set device and random seeds
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(1234)
@@ -27,6 +25,8 @@ else:
 ######################################################################
 class PINN(nn.Module):
 
+    ## init
+
     def __init__(self, layers):
 
         super(PINN, self).__init__()
@@ -36,7 +36,7 @@ class PINN(nn.Module):
             if i < len(layers) - 2:
                 self.net_layers.append(nn.Tanh())
     
-    ##
+    ## forward 
     
     def forward(self, inputs):
 
@@ -44,7 +44,7 @@ class PINN(nn.Module):
             inputs = layer(inputs)
         return inputs
     
-    ##
+    ## compute gradients
     
     def compute_gradient(self, variable, respect_to):
 
@@ -54,9 +54,9 @@ class PINN(nn.Module):
     
     def loss_func(self, input_vals, true_vals, pred_vals):
 
-        t_in, x_in, y_in, h_in = input_vals[:, 0], input_vals[:, 1], input_vals[:, 2], input_vals[:, 3]
-        u_true, v_true, z_true = true_vals[:, 0], true_vals[:, 1], true_vals[:, 2]
-        u_pred, v_pred, z_pred = pred_vals[:, 0], pred_vals[:, 1], pred_vals[:, 2]
+        t_in, x_in, y_in = input_vals[:, 0], input_vals[:, 1], input_vals[:, 2]
+        h_true, z_true, u_true, v_true = true_vals[:, 0], true_vals[:, 1], true_vals[:, 2], true_vals[:, 3]
+        h_pred, z_pred, u_pred, v_pred = pred_vals[:, 0], pred_vals[:, 1], pred_vals[:, 2], pred_vals[:, 3]
 
         # Data fidelity loss
         loss_data_fidelity = torch.mean((u_true - u_pred)**2) + \
@@ -75,8 +75,8 @@ class PINN(nn.Module):
         z_y = self.compute_gradient(z_pred, y_in)
 
         # Residuals of NSWE equations
-        f_u = u_t + (u_pred * u_x + v_pred * u_y) + 9.81 * (z_x + z_y) + 0.0
-        f_v = v_t + (u_pred * v_x + v_pred * v_y) + 9.81 * (z_x + z_y) + 0.0
+        f_u = u_t + (u_pred * u_x + v_pred * u_y) + 9.81 * (z_x + z_y)
+        f_v = v_t + (u_pred * v_x + v_pred * v_y) + 9.81 * (z_x + z_y)
         f_c = z_t + (u_pred * z_x + v_pred * z_y) + (h_in + z_pred) * (u_x + v_y)
 
         # Physics-based constraint loss
@@ -97,14 +97,14 @@ class PINN(nn.Module):
         for it in range(nIter):
             if it % 100 == 0:
                 print(it)
-            for t_train, x_train, y_train, h_train, u_train, v_train, z_train in train_data:
+            for t_train, x_train, y_train, h_train, z_train, u_train, v_train in train_data:
 
-                t_train, x_train, y_train, h_train, u_train, v_train, z_train = \
-                t_train.to(device), x_train.to(device), y_train.to(device), h_train.to(device), \
-                u_train.to(device), v_train.to(device), z_train.to(device)
+                t_train, x_train, y_train, h_train, z_train, u_train, v_train = \
+                t_train.to(device), x_train.to(device), y_train.to(device), \
+                h_train.to(device), z_train.to(device), u_train.to(device), v_train.to(device)
 
-                inputs = torch.cat((t_train, x_train, y_train, h_train), dim=1).requires_grad_(True)
-                true_vals = torch.cat((u_train, v_train, z_train), dim=1)
+                inputs = torch.cat((t_train, x_train, y_train), dim=1)
+                true_vals = torch.cat((h_train, z_train, u_train, v_train), dim=1)
 
                 optimizer_adam.zero_grad()
                 pred_vals = self(inputs)
@@ -123,12 +123,12 @@ class PINN(nn.Module):
         for i in range(nIter):
             for t_train, x_train, y_train, h_train, u_train, v_train, z_train in train_data:
 
-                t_train, x_train, y_train, h_train, u_train, v_train, z_train = \
-                t_train.to(device), x_train.to(device), y_train.to(device), h_train.to(device), \
-                u_train.to(device), v_train.to(device), z_train.to(device)
+                t_train, x_train, y_train, h_train, z_train, u_train, v_train = \
+                t_train.to(device), x_train.to(device), y_train.to(device), \
+                h_train.to(device), z_train.to(device), u_train.to(device), v_train.to(device)
 
-                inputs = torch.cat((t_train, x_train, y_train, h_train), dim=1).requires_grad_(True)
-                true_vals = torch.cat((u_train, v_train, z_train), dim=1)
+                inputs = torch.cat((t_train, x_train, y_train), dim=1)
+                true_vals = torch.cat((h_train, z_train, u_train, v_train), dim=1)
                 
                 optimizer_lbfgs.zero_grad()
                 pred_vals = self(inputs)
@@ -144,12 +144,11 @@ class PINN(nn.Module):
         with torch.no_grad():
             for t_test, x_test, y_test, h_test, u_test, v_test, z_test in test_data:
 
-                t_test, x_test, y_test, h_test, u_test, v_test, z_test = \
-                t_test.to(device), x_test.to(device), y_test.to(device), h_test.to(device), \
-                u_test.to(device), v_test.to(device), z_test.to(device)
-                 
-                inputs = torch.cat((t_test, x_test, y_test, h_test), dim=1).requires_grad_(True)
-                true_vals = torch.cat((u_test, v_test, z_test), dim=1)
+                t_test, x_test, y_test, h_test, z_test, u_test, v_test = \
+                t_test.to(device), x_test.to(device), y_test.to(device), \
+                h_test.to(device), z_test.to(device), u_test.to(device), v_test.to(device)
+                inputs = torch.cat((t_test, x_test, y_test), dim=1)
+                true_vals = torch.cat((h_test, z_test, u_test, v_test), dim=1)
                 pred_vals = self(inputs)
                 loss = self.loss_func(inputs, true_vals, pred_vals)
 
@@ -161,18 +160,18 @@ class PINN(nn.Module):
 if __name__ == "__main__": 
     # Define some parameters
     nIter = 50000   # iterations for training
-    layers = [4, 20, 20, 20, 20, 20, 20, 20, 20, 3] # layers
+    layers = [3, 20, 20, 20, 20, 20, 20, 20, 20, 4] # layers
     # Extract all data.
     data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ').astype(np.float32) # load data
-    t_all = torch.tensor(data[:, 0:1], dtype=torch.float32, device=device)
-    x_all = torch.tensor(data[:, 1:2], dtype=torch.float32, device=device)
-    y_all = torch.tensor(data[:, 2:3], dtype=torch.float32, device=device)
+    t_all = torch.tensor(data[:, 0:1], requires_grad=True, dtype=torch.float32, device=device)
+    x_all = torch.tensor(data[:, 1:2], requires_grad=True, dtype=torch.float32, device=device)
+    y_all = torch.tensor(data[:, 2:3], requires_grad=True, dtype=torch.float32, device=device)
     h_all = torch.tensor(data[:, 3:4], dtype=torch.float32, device=device)
     z_all = torch.tensor(data[:, 4:5], dtype=torch.float32, device=device)
     u_all = torch.tensor(data[:, 5:6], dtype=torch.float32, device=device)
     v_all = torch.tensor(data[:, 6:7], dtype=torch.float32, device=device)
     # Shuffle and split the data into train and test datasets
-    dataset = torch.utils.data.TensorDataset(t_all, x_all, y_all, h_all, u_all, v_all, z_all)
+    dataset = torch.utils.data.TensorDataset(t_all, x_all, y_all, h_all, z_all, u_all, v_all)
     train_size = int(0.8 * len(dataset))
     test_size = len(dataset) - train_size
     train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
