@@ -43,17 +43,17 @@ class PINN(nn.Module):
         for layer in self.net_layers:
             inputs = layer(inputs)
         return inputs
-    
+
     ## calculate loss with data and physics
-    
-    def loss_func(self, input_vals, true_vals, pred_vals):
-        
+
+    def loss_func(self, input_vals, true_vals):
+
         pred_vals = self(input_vals)
         t_in, x_in, y_in = input_vals[:, 0], input_vals[:, 1], input_vals[:, 2]
         h_true, z_true, u_true, v_true = true_vals[:, 0], true_vals[:, 1], true_vals[:, 2], true_vals[:, 3]
         h_pred, z_pred, u_pred, v_pred = pred_vals[:, 0], pred_vals[:, 1], pred_vals[:, 2], pred_vals[:, 3]
 
-        # loss with data
+        # loss with exact data / observations
         loss_data_fidelity = torch.mean((h_true - h_pred)**2) + \
             torch.mean((z_true - z_pred)**2) + \
             torch.mean((u_true - u_pred)**2) + \
@@ -70,7 +70,7 @@ class PINN(nn.Module):
         z_x = torch.autograd.grad(z_pred, x_in, grad_outputs=torch.ones_like(z_pred), create_graph=True)[0]
         z_y = torch.autograd.grad(z_pred, y_in, grad_outputs=torch.ones_like(z_pred), create_graph=True)[0]
 
-        # loss with physics
+        # loss with physics (Navier Stokes / Boussinesq etc)
         f_u = u_t + (u_pred * u_x + v_pred * u_y) + 9.81 * (z_x + z_y)
         f_v = v_t + (u_pred * v_x + v_pred * v_y) + 9.81 * (z_x + z_y)
         f_c = z_t + (u_pred * z_x + v_pred * z_y) + (h_pred + z_pred) * (u_x + v_y)
@@ -113,7 +113,13 @@ class PINN(nn.Module):
 
         # Switch to L-BFGS optimizer / careful! this uses stale input data
         optimizer_lbfgs = optim.LBFGS(self.parameters(), lr=1)
-        for i in range(nIter):
+        
+        for it_lbfgs in range(nIter):
+            
+            for it_lbfgs in range(nIter):
+                if it_lbfgs % 100 == 0:
+                    print(it_lbfgs)
+                    
             for t_train, x_train, y_train, h_train, u_train, v_train, z_train in train_data:
 
                 t_train, x_train, y_train, h_train, z_train, u_train, v_train = \
@@ -124,8 +130,7 @@ class PINN(nn.Module):
                 true_vals = torch.cat((h_train, z_train, u_train, v_train), dim=1)
                 
                 optimizer_lbfgs.zero_grad()
-                pred_vals = self(inputs)
-                loss = self.loss_func(inputs, true_vals, pred_vals)
+                loss = self.loss_func(inputs, true_vals)
                 loss.backward()
                 optimizer_lbfgs.step()
                 print(f'Iter {it}, Loss: {loss.item()}')            
@@ -133,17 +138,20 @@ class PINN(nn.Module):
     ## test the model
    
     def test(self, test_data):
+        
         model.eval()
+        
         with torch.no_grad():
+            
             for t_test, x_test, y_test, h_test, u_test, v_test, z_test in test_data:
 
                 t_test, x_test, y_test, h_test, z_test, u_test, v_test = \
                 t_test.to(device), x_test.to(device), y_test.to(device), \
                 h_test.to(device), z_test.to(device), u_test.to(device), v_test.to(device)
+                
                 inputs = torch.cat((t_test, x_test, y_test), dim=1)
                 true_vals = torch.cat((h_test, z_test, u_test, v_test), dim=1)
-                pred_vals = self(inputs)
-                loss = self.loss_func(inputs, true_vals, pred_vals)
+                loss = self.loss_func(inputs, true_vals)
 
                 print(f'Test, Loss: {loss.item()}')
 
