@@ -21,6 +21,8 @@ if torch.cuda.is_available():
 else:
     device = torch.device('cpu')
     
+print(device)
+    
     
 # the deep neural network
 class DNN(torch.nn.Module):
@@ -192,7 +194,7 @@ if __name__ == "__main__":
     
     # Define some parameters
     nIter = 50000   # iterations for training
-    Ntrain = 1000
+    Ntrain = 4000
     layers = [3, 20, 20, 20, 20, 20, 20, 20, 20, 4] # layers
     # Extract all data.
     data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ').astype(np.float32) # load data
