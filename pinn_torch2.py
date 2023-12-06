@@ -5,9 +5,6 @@ December 2023
 w/ Pytorch
 """
 
-import sys
-sys.path.insert(0, '../Utilities/')
-
 import torch
 from collections import OrderedDict
 import numpy as np
@@ -226,7 +223,7 @@ if __name__ == "__main__":
     Ntrain = 4000
     layers = [3, 20, 20, 20, 20, 20, 20, 20, 20, 4] # layers
     # Extract all data.
-    data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ').astype(np.float32) # load data
+    data = np.genfromtxt('../../data/beach_2d.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
     x_all = data[:, 1:2].astype(np.float64)
     y_all = data[:, 2:3].astype(np.float64)
