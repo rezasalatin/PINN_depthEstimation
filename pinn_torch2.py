@@ -78,9 +78,19 @@ class PhysicsInformedNN():
         
         # deep neural networks
         self.dnn = DNN(layers).to(device)
-        
-        # optimizers: using the same settings
-        self.optimizer = torch.optim.LBFGS(
+
+        self.iter = 0
+
+    # Initialize two optimizers
+    def init_optimizers(self):
+        # Adam optimizer
+        self.optimizer_Adam = torch.optim.Adam(
+            self.dnn.parameters(), 
+            lr=0.001  # You can adjust this learning rate
+        )
+
+        # L-BFGS optimizer
+        self.optimizer_LBFGS = torch.optim.LBFGS(
             self.dnn.parameters(), 
             lr=1.0, 
             max_iter=50000, 
@@ -88,17 +98,14 @@ class PhysicsInformedNN():
             history_size=50,
             tolerance_grad=1e-10, 
             tolerance_change=1.0 * np.finfo(float).eps,
-            line_search_fn="strong_wolfe"       # can be "strong_wolfe"
+            line_search_fn="strong_wolfe"
         )
-
-        self.iter = 0
         
     def net_u(self, t, x, y):  
         hzuv = self.dnn(torch.cat([t, x, y], dim=1))
         return hzuv
     
     def loss_func(self):
-        self.optimizer.zero_grad()
         
         hzuv_pred = self.net_u(self.t, self.x, self.y)
         
@@ -177,7 +184,6 @@ class PhysicsInformedNN():
         
         loss = loss_u + loss_f
                 
-        loss.backward()
         self.iter += 1
         if self.iter % 100 == 0:
             print(
@@ -188,8 +194,29 @@ class PhysicsInformedNN():
     def train(self):
         self.dnn.train()
                 
-        # Backward and optimize
-        self.optimizer.step(self.loss_func)
+        # First phase of training with Adam
+        for i in range(50000):  # 50,000 iterations
+            self.optimizer_Adam.zero_grad()  # Zero gradients for Adam optimizer
+            loss = self.loss_func()
+            loss.backward()
+            self.optimizer_Adam.step()
+
+            #if i % 100 == 0:
+            #    print('Adam Iter %d, Loss: %.5e' % (i, loss.item()))
+
+        # Second phase of training with LBFGS
+        def closure():
+            self.optimizer_LBFGS.zero_grad()  # Zero gradients for LBFGS optimizer
+            loss = self.loss_func()
+            loss.backward()
+            return loss
+
+        for i in range(50000):  # Another 50,000 iterations
+            self.optimizer_LBFGS.step(closure)
+
+            #if i % 100 == 0:
+            #    loss = closure()  # Recalculate to get current loss
+            #    print('LBFGS Iter %d, Loss: %.5e' % (i, loss.item()))
     
     
 if __name__ == "__main__": 
@@ -218,6 +245,7 @@ if __name__ == "__main__":
     U_star_train = U_star[idx, :]       # exact outputs (h,z,u,v)
     
     model = PhysicsInformedNN(X_star_train, U_star_train, X_star, layers)
+    model.init_optimizers()  # Initialize optimizers
     # Training
     start_time = time.time()
     model.train()
