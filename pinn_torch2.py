@@ -17,8 +17,10 @@ np.random.seed(1234)
 
 # CUDA support 
 if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(1234)
     device = torch.device('cuda')
 else:
+    torch.manual_seed(1234)
     device = torch.device('cpu')
     
 print(device)
