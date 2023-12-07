@@ -127,8 +127,8 @@ class PhysicsInformedNN():
     def net_u(self, t, x, y):  
 
         # input normalization between -1 and 1
-        t_norm = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
-        x_norm = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
+        t_norm = t #2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
+        x_norm = x #2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
         y_norm = y #2.0 * (y - self.vals_min[2])/(self.vals_max[2]-self.vals_min[2]) - 1.0
         
         hzuv = self.dnn(torch.cat([t_norm, x_norm, y_norm], dim=1))
@@ -291,4 +291,3 @@ if __name__ == "__main__":
 
     # Save to a file
     np.savetxt('predictions.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred,v_pred', comments='')
-        
