@@ -53,7 +53,7 @@ class DNN(torch.nn.Module):
         torch.nn.init.zeros_(last_linear_layer.bias)
 
         layer_list.append(('layer_%d' % (self.depth - 1), last_linear_layer))
-            
+
         layer_list.append(
             ('layer_%d' % (self.depth - 1), torch.nn.Linear(layers[-2], layers[-1]))
         )
@@ -69,7 +69,7 @@ class DNN(torch.nn.Module):
 # the physics-guided neural network
 class PhysicsInformedNN():
     
-    def __init__(self, X_train, U_train, X_all, layers, X_star_min, X_star_max):    
+    def __init__(self, X_train, U_train, X_all, layers, X_star_min, X_star_max, max_iter_adam, max_iter_lbfgs):     
         # data
         self.t = torch.tensor(X_train[:, 0:1], requires_grad=True).float().to(device)
         self.x = torch.tensor(X_train[:, 1:2], requires_grad=True).float().to(device)
@@ -93,6 +93,11 @@ class PhysicsInformedNN():
         self.dnn = DNN(layers).to(device)
         # initialize iteration number
         self.iter = 0
+        self.max_iter_adam = max_iter_adam
+        # Add a counter for LBFGS iterations
+        self.lbfgs_iter = 0
+        self.max_iter_lbfgs = max_iter_lbfgs
+
         # initialize dynamic weights
         self.alpha = 1.0  # initial value for alpha
         self.lambda_val = 0.1 # initialize lambda
@@ -109,8 +114,8 @@ class PhysicsInformedNN():
         self.optimizer_LBFGS = torch.optim.LBFGS(
             self.dnn.parameters(), 
             lr=1.0, 
-            max_iter=1, 
-            max_eval=None, 
+            max_iter=50000, 
+            max_eval=50000, 
             history_size=50,
             tolerance_grad=1e-10, 
             tolerance_change=1.0 * np.finfo(float).eps,
@@ -127,8 +132,8 @@ class PhysicsInformedNN():
     def net_u(self, t, x, y):  
 
         # input normalization between -1 and 1
-        t_norm = t #2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
-        x_norm = x #2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
+        t_norm = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
+        x_norm = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
         y_norm = y #2.0 * (y - self.vals_min[2])/(self.vals_max[2]-self.vals_min[2]) - 1.0
         
         hzuv = self.dnn(torch.cat([t_norm, x_norm, y_norm], dim=1))
@@ -193,25 +198,30 @@ class PhysicsInformedNN():
         f_v = v_t + (u_pred * v_x + v_pred * v_y) + 9.81 * z_y
         
         loss_f = torch.mean(f_u**2) + torch.mean(f_v**2) + torch.mean(f_c**2)
-        
-        loss = self.alpha* loss_f + loss_u
+        loss_f = self.alpha * loss_f
+
+        loss = loss_f + loss_u
 
         # Store individual loss components for dynamic weight calculation
-        self.loss_lf = self.alpha * loss_f
+        self.loss_lf = loss_f
         self.loss_lu = loss_u
          
         self.iter += 1
         if self.iter % 100 == 0:
+            # Retrieve the current learning rate for Adam optimizer
+            current_lr = self.optimizer_Adam.param_groups[0]['lr']
+            
             print(
-                'Iter %d, alpha: %.2e, Loss_u+alpha*loss_f: %.3e, Loss_u: %.3e, Loss_f: %.3e' % (self.iter, self.alpha, loss.item(), loss_u.item(), loss_f.item())
-            )
+            'Iter %d, LR: %.2e, Alpha: %.2e, Loss: %.3e, Loss_u: %.3e, Loss_f: %.3e' % 
+            (self.iter, current_lr, self.alpha, loss.item(), loss_u.item(), loss_f.item())
+            )   
         return loss
     
     def train(self):
         self.dnn.train()
 
         # First phase of training with Adam
-        for i in range(10000):  # 50,000 iterations
+        for i in range(self.max_iter_adam):  # iterations
             self.optimizer_Adam.zero_grad()  # Zero gradients for Adam optimizer
             loss = self.loss_func()
             loss.backward(retain_graph=True)  # Retain graph for dynamic weight calculation
@@ -220,11 +230,22 @@ class PhysicsInformedNN():
             # Now, the optimizer step
             self.optimizer_Adam.step()
             self.scheduler_Adam.step()  # Update the learning rate
-            
-            
-            if i % 100 == 0:
-                current_lr = self.scheduler_Adam.get_last_lr()[0]
-                print(f'Adam Iter {i}, LR: {current_lr:.2e}')
+
+        # Second phase of training with LBFGS
+        def closure():
+            self.optimizer_LBFGS.zero_grad()  # Zero gradients for LBFGS optimizer
+            # Forward pass for loss calculation
+            loss = self.loss_func()
+            loss.backward(retain_graph=True)  # Retain graph for dynamic weight calculation
+            # Update dynamic weights inside the closure for LBFGS
+            self.compute_dynamic_weights()
+            # Increment LBFGS iteration counter
+            self.lbfgs_iter += 1
+
+            return loss
+        
+        while self.lbfgs_iter < self.max_iter_lbfgs:  # Run until max LBFGS iterations reached
+            self.optimizer_LBFGS.step(closure)
 
     def predict(self, X):
         t = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
@@ -242,8 +263,11 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
     
     # Define some parameters
-    Ntrain = 4000
+    Ntrain = 2000
     layers = [3, 20, 20, 20, 20, 20, 20, 20, 20, 4] # layers
+    MAX_ITER_ADAM = 1000
+    MAX_ITER_LBFGS = 500
+
     # Extract all data.
     data = np.genfromtxt('../data/beach_1d.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
@@ -267,7 +291,7 @@ if __name__ == "__main__":
     X_star_train = X_star[idx, :]       # inputs (t,x,y)
     U_star_train = U_star[idx, :]       # exact outputs (h,z,u,v)
     
-    model = PhysicsInformedNN(X_star_train, U_star_train, X_star, layers, X_star_min, X_star_max)
+    model = PhysicsInformedNN(X_star_train, U_star_train, X_star, layers, X_star_min, X_star_max, MAX_ITER_ADAM, MAX_ITER_LBFGS)
     model.init_optimizers()  # Initialize optimizers
     # Training
     start_time = time.time()
