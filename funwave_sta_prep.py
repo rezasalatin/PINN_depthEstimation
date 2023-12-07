@@ -4,7 +4,7 @@ import numpy as np
 # t time, x hori, y vert, h depth, z surf elev, u vel in hori, v vel in vert
 
 # Define the directory path
-directory = r"\\wsl.localhost\Ubuntu-22.04\home\reza\projects\Boussinesq\FUNWAVE-TVD\simple_cases\beach_2d\input_files"
+directory = r"\\wsl.localhost\Ubuntu-18.04\home\reza\projects\FUNWAVE\FUNWAVE-TVD\simple_cases\surface_wave_1d\input_files"
 
 # List to store the selected data from each file
 all_selected_rows = pd.DataFrame(columns=['t', 'x', 'y', 'h', 'z', 'u', 'v'])
@@ -12,7 +12,7 @@ all_selected_rows = pd.DataFrame(columns=['t', 'x', 'y', 'h', 'z', 'u', 'v'])
 random_indices = np.random.choice(400, 100, replace=False)  # 100 unique indices from first 400 rows
 
 # Loop through each file
-for i in range(1, 51):
+for i in range(1, 16):
     # t, z, u, v
     station_name = f"{directory}\\output\sta_{i:04}"  # Adjust the file extension if needed
     # Read the file, assuming whitespace or tab delimited
@@ -22,10 +22,10 @@ for i in range(1, 51):
     data['z'] = data['z'].round(3)   # Round second column ('z') to 0.001 m
     data['u'] = data['u'].round(3)   # Round third  column ('u') to 0.001 m/s
     data['v'] = data['v'].round(3)   # Round fourth column ('v') to 0.001 m/s
-    # Select the first 400 rows
-    data = data.head(400)
-    # Randomly select 100 rows
-    selected_rows = data.iloc[random_indices]
+    # Select the first 401 rows
+    data = data.head(401)
+    # Randomly select rows
+    selected_rows = data #data.iloc[random_indices]
     
     # x, y
     gauge_file = f"{directory}\\gauges.txt"
@@ -33,8 +33,8 @@ for i in range(1, 51):
     gauges_data = pd.read_csv(gauge_file, delim_whitespace=True, header=None)
     idX, idY = gauges_data.iloc[i-1, :2]
     # Add X and Y values to each row
-    selected_rows.insert(1, 'y', (idY-1)*2.0)
-    selected_rows.insert(1, 'x', (idX-1)*2.0)
+    selected_rows.insert(1, 'y', (idY-1)*1.0)
+    selected_rows.insert(1, 'x', (idX-1)*1.0)
 
     # depth
     depth_file = f"{directory}\\output\dep.out"
@@ -49,10 +49,10 @@ for i in range(1, 51):
 final_data = all_selected_rows
 
 # Sort the selected rows based on 't'
-final_data = final_data.sort_values(by=['t', 'x', 'y'])
+# final_data = final_data.sort_values(by=['t', 'x', 'y'])
 
 # Define the name for the combined extracted file
-extracted_file_name = f"{directory}\\extracted.csv"
+extracted_file_name = f"{directory}\\beach1d.csv"
 
 # Save the combined data to the new file
 final_data.to_csv(extracted_file_name, sep=' ', index=False, header=False)
