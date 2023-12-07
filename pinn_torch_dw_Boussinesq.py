@@ -109,8 +109,8 @@ class PhysicsInformedNN():
         self.optimizer_LBFGS = torch.optim.LBFGS(
             self.dnn.parameters(), 
             lr=1.0, 
-            max_iter=50000, 
-            max_eval=50000, 
+            max_iter=1, 
+            max_eval=None, 
             history_size=50,
             tolerance_grad=1e-10, 
             tolerance_change=1.0 * np.finfo(float).eps,
@@ -129,7 +129,7 @@ class PhysicsInformedNN():
         # input normalization between -1 and 1
         t_norm = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
         x_norm = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
-        y_norm = 2.0 * (y - self.vals_min[2])/(self.vals_max[2]-self.vals_min[2]) - 1.0
+        y_norm = y #2.0 * (y - self.vals_min[2])/(self.vals_max[2]-self.vals_min[2]) - 1.0
         
         hzuv = self.dnn(torch.cat([t_norm, x_norm, y_norm], dim=1))
         return hzuv
@@ -145,6 +145,7 @@ class PhysicsInformedNN():
         )[0]
         return grad
     
+    # dynamic wieghts
     def compute_dynamic_weights(self):
         # Calculate gradients
         gradients_lf = torch.autograd.grad(self.loss_lf, self.dnn.parameters(), retain_graph=True)
@@ -210,7 +211,7 @@ class PhysicsInformedNN():
         self.dnn.train()
 
         # First phase of training with Adam
-        for i in range(40000):  # 50,000 iterations
+        for i in range(10000):  # 50,000 iterations
             self.optimizer_Adam.zero_grad()  # Zero gradients for Adam optimizer
             loss = self.loss_func()
             loss.backward(retain_graph=True)  # Retain graph for dynamic weight calculation
@@ -225,23 +226,18 @@ class PhysicsInformedNN():
                 current_lr = self.scheduler_Adam.get_last_lr()[0]
                 print(f'Adam Iter {i}, LR: {current_lr:.2e}')
 
-        # Second phase of training with LBFGS
-        def closure():
-            self.optimizer_LBFGS.zero_grad()  # Zero gradients for LBFGS optimizer
-            # Forward pass for loss calculation
-            loss = self.loss_func()
-            loss.backward(retain_graph=True)  # Retain graph for dynamic weight calculation
+    def predict(self, X):
+        t = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
+        x = torch.tensor(X[:, 1:2], requires_grad=True).float().to(device)
+        y = torch.tensor(X[:, 2:3], requires_grad=True).float().to(device)
 
-            # Update dynamic weights inside the closure for LBFGS
-            self.compute_dynamic_weights()
-
-            return loss
+        hzuv_pred = self.net_u(t, x, y)
         
-        for i in range(10000):  # Another 50,000 iterations
-            self.optimizer_LBFGS.step(closure)
-            if i % 100 == 0:
-                current_lr_LBFGS = self.optimizer_LBFGS.param_groups[0]['lr']
-                print(f'LBFGS Iter {i}, LR: {current_lr_LBFGS:.2e}')
+        h_pred = hzuv_pred[:, 0:1].to(device)
+        z_pred = hzuv_pred[:, 1:2].to(device)
+        u_pred = hzuv_pred[:, 2:3].to(device)
+        v_pred = hzuv_pred[:, 3:4].to(device)
+        return h_pred, z_pred, u_pred, v_pred  # Return the computed predictions
     
 if __name__ == "__main__": 
     
@@ -249,7 +245,7 @@ if __name__ == "__main__":
     Ntrain = 4000
     layers = [3, 20, 20, 20, 20, 20, 20, 20, 20, 4] # layers
     # Extract all data.
-    data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ').astype(np.float32) # load data
+    data = np.genfromtxt('../data/beach_1d.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
     x_all = data[:, 1:2].astype(np.float64)
     y_all = data[:, 2:3].astype(np.float64)
@@ -279,9 +275,20 @@ if __name__ == "__main__":
     elapsed = time.time() - start_time                    
     print('Training time: %.4f' % elapsed)
     # Save the results
-    #torch.save(model.state_dict(), '../log/model.ckpt')
+    torch.save(model.dnn.state_dict(), './log/model.ckpt')
     # Testing
-    #model.test()             
+    X_test = np.arange(1024).reshape(-1, 1).astype(np.float64)  # Ensure correct shape
+    Y_test = np.full((1024, 1), 1).astype(np.float64)           # Ensure correct shape
+    T_test = np.full((1024, 1), 200).astype(np.float64)         # Ensure correct shape
+    X_star = np.hstack((T_test, X_test, Y_test))  # Order: t, x, y
+    h_pred, z_pred, u_pred, v_pred = model.predict(X_star)      
                
+    # Concatenate the predictions for saving
+    predictions = np.hstack([h_pred.detach().cpu().numpy(), 
+                            z_pred.detach().cpu().numpy(), 
+                            u_pred.detach().cpu().numpy(), 
+                            v_pred.detach().cpu().numpy()])
 
-    
+    # Save to a file
+    np.savetxt('predictions.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred,v_pred', comments='')
+        
