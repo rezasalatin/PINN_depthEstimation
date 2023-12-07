@@ -68,8 +68,8 @@ class DNN(torch.nn.Module):
     
 # the physics-guided neural network
 class PhysicsInformedNN():
-    def __init__(self, X_train, U_train, X_all, layers, X_star_min, X_star_max):
-        
+    
+    def __init__(self, X_train, U_train, X_all, layers, X_star_min, X_star_max):    
         # data
         self.t = torch.tensor(X_train[:, 0:1], requires_grad=True).float().to(device)
         self.x = torch.tensor(X_train[:, 1:2], requires_grad=True).float().to(device)
@@ -91,8 +91,11 @@ class PhysicsInformedNN():
         
         # deep neural networks
         self.dnn = DNN(layers).to(device)
-
+        # initialize iteration number
         self.iter = 0
+        # initialize dynamic weights
+        self.alpha = 1.0  # initial value for alpha
+        self.lambda_val = 0.1 # initialize lambda
 
     # Initialize two optimizers
     def init_optimizers(self):
@@ -142,6 +145,19 @@ class PhysicsInformedNN():
         )[0]
         return grad
     
+    def compute_dynamic_weights(self):
+        # Calculate gradients
+        gradients_lf = torch.autograd.grad(self.loss_lf, self.dnn.parameters(), retain_graph=True)
+        gradients_lu = torch.autograd.grad(self.loss_lu, self.dnn.parameters(), retain_graph=True)
+
+        # Compute max of gradients for Le and mean for Lb and Li
+        gradients_lf = torch.mean(torch.stack([torch.norm(g, 1) for g in gradients_lf]))
+        gradients_lu = max([torch.norm(g, 1) for g in gradients_lu])
+
+        # Update alpha and beta using the dynamic weight strategy
+        self.alpha = (1 - self.lambda_val) * self.alpha \
+            + self.lambda_val * (gradients_lu / gradients_lf)
+    
     def loss_func(self):
         
         hzuv_pred = self.net_u(self.t, self.x, self.y)
@@ -168,18 +184,25 @@ class PhysicsInformedNN():
         z_x = self.compute_gradient(z_pred, self.x)
         z_y = self.compute_gradient(z_pred, self.y)
 
+        hu_x = self.compute_gradient((h_pred + z_pred) * u_pred, self.x)
+        hv_y = self.compute_gradient((h_pred + z_pred) * v_pred, self.y)
+
         # loss with physics (Navier Stokes / Boussinesq etc)
+        f_c = z_t + (hu_x + hv_y)
         f_u = u_t + (u_pred * u_x + v_pred * u_y) + 9.81 * (z_x + z_y)
         f_v = v_t + (u_pred * v_x + v_pred * v_y) + 9.81 * (z_x + z_y)
-        f_c = z_t + (u_pred * z_x + v_pred * z_y) + (h_pred + z_pred) * (u_x + v_y)
         loss_f = torch.mean(f_u**2) + torch.mean(f_v**2) + torch.mean(f_c**2)
         
-        loss = loss_u + loss_f
-                
+        loss = self.alpha* loss_f + loss_u
+
+        # Store individual loss components for dynamic weight calculation
+        self.loss_lf = self.alpha * loss_f
+        self.loss_lu = loss_u
+         
         self.iter += 1
         if self.iter % 100 == 0:
             print(
-                'Iter %d, Loss: %.5e, Loss_u: %.5e, Loss_f: %.5e' % (self.iter, loss.item(), loss_u.item(), loss_f.item())
+                'Iter %d, alpha: %.2e, Loss_u+alpha*loss_f: %.3e, Loss_u: %.3e, Loss_f: %.3e' % (self.iter, self.alpha, loss.item(), loss_u.item(), loss_f.item())
             )
         return loss
     
@@ -190,9 +213,14 @@ class PhysicsInformedNN():
         for i in range(40000):  # 50,000 iterations
             self.optimizer_Adam.zero_grad()  # Zero gradients for Adam optimizer
             loss = self.loss_func()
-            loss.backward()
+            loss.backward(retain_graph=True)  # Retain graph for dynamic weight calculation
+            # Update dynamic weights after each optimizer step
+            self.compute_dynamic_weights()
+            # Now, the optimizer step
             self.optimizer_Adam.step()
             self.scheduler_Adam.step()  # Update the learning rate
+            
+            
             if i % 100 == 0:
                 current_lr = self.scheduler_Adam.get_last_lr()[0]
                 print(f'Adam Iter {i}, LR: {current_lr:.2e}')
@@ -200,9 +228,15 @@ class PhysicsInformedNN():
         # Second phase of training with LBFGS
         def closure():
             self.optimizer_LBFGS.zero_grad()  # Zero gradients for LBFGS optimizer
+            # Forward pass for loss calculation
             loss = self.loss_func()
-            loss.backward()
+            loss.backward(retain_graph=True)  # Retain graph for dynamic weight calculation
+
+            # Update dynamic weights inside the closure for LBFGS
+            self.compute_dynamic_weights()
+
             return loss
+        
         for i in range(10000):  # Another 50,000 iterations
             self.optimizer_LBFGS.step(closure)
             if i % 100 == 0:
