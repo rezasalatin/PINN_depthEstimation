@@ -93,8 +93,6 @@ class PhysicsInformedNN():
         self.dnn = DNN(layers).to(device)
         # initialize iteration number
         self.iter = 0
-        # Add a counter for LBFGS iterations
-        self.lbfgs_iter = 0
 
         # initialize dynamic weights
         self.alpha = 1.0  # initial value for alpha
@@ -112,19 +110,12 @@ class PhysicsInformedNN():
         self.optimizer_LBFGS = torch.optim.LBFGS(
             self.dnn.parameters(), 
             lr=1.0, 
-            max_iter=50000, 
-            max_eval=50000, 
+            max_iter=80, 
+            max_eval=80, 
             history_size=50,
             tolerance_grad=1e-10, 
             tolerance_change=1.0 * np.finfo(float).eps,
             line_search_fn="strong_wolfe"
-        )
-
-        # Define learning rate scheduler for Adam
-        self.scheduler_Adam = torch.optim.lr_scheduler.StepLR(
-            self.optimizer_Adam, 
-            step_size=5000, 
-            gamma=0.8
         )
         
     def net_u(self, t, x, y):  
@@ -206,72 +197,65 @@ class PhysicsInformedNN():
          
         self.iter += 1
         if self.iter % 100 == 0:
-            # Retrieve the current learning rate for Adam optimizer
             current_lr = self.optimizer_Adam.param_groups[0]['lr']
-            
             print(
-            'Iter %d, LR: %.2e, Alpha: %.2e, Loss: %.3e, Loss_u: %.3e, Loss_f: %.3e' % 
-            (self.iter, current_lr, self.alpha, loss.item(), loss_u.item(), loss_f.item())
-            )   
-        return loss
+                'Iter %d, Loss: %.3e, Loss_u: %.3e, Loss_f: %.3e, LR: %.3e' % 
+                (self.iter, loss.item(), loss_u.item(), loss_f.item(), current_lr)
+            )
+
+
+        return loss, loss_u, loss_f
     
     def train(self, num_cycles, adam_iters, lbfgs_iters):
         self.dnn.train()
-
+        
         best_loss = float('inf')
         best_model_state = None
 
-        for _ in range(num_cycles):
+        for k in range(num_cycles):
             # Adam phase
+            adam_improved = False  # Track if Adam improves in this cycle
             for i in range(adam_iters):
                 self.optimizer_Adam.zero_grad()
-                loss = self.loss_func()
-                loss.backward()
+                loss, loss_u, loss_f = self.loss_func()
                 self.compute_dynamic_weights()
+                loss.backward(retain_graph=True)
                 self.optimizer_Adam.step()
-                self.scheduler_Adam.step()
 
                 # Track the best model and loss
                 if loss.item() < best_loss:
                     best_loss = loss.item()
                     best_model_state = self.dnn.state_dict().copy()  # Save the best model state
-
-                # Print the current status
-                if self.iter % 100 == 0:
-                    current_lr = self.optimizer_Adam.param_groups[0]['lr']
-                    print('Adam Iter %d, LR: %.2e, Alpha: %.2e, Loss: %.3e, Loss_u: %.3e, Loss_f: %.3e' %
-                          (self.iter, current_lr, self.alpha, loss.item(), loss_u.item(), loss_f.item()))
+                    adam_improved = True
                     
-            # Check if Adam improved the loss
-            if loss.item() < best_loss:
-                # Update the best loss and model state
-                best_loss = loss.item()
-                best_model_state = self.dnn.state_dict().copy()
-
+            # Adjust learning rate based on Adam's success
+            if adam_improved:
+                for param_group in self.optimizer_Adam.param_groups:
+                    new_lr = param_group['lr'] * 0.8  # Calculate the new learning rate
+                    param_group['lr'] = max(new_lr, 1e-6)  # Set to new_lr or max_lr, whichever is smaller
             else:
-                # Restore the best model state before starting LBFGS
+                for param_group in self.optimizer_Adam.param_groups:
+                    new_lr = param_group['lr'] / 0.8  # Calculate the new learning rate
+                    param_group['lr'] = max(new_lr, 1e-4)  # Set to new_lr or max_lr, whichever is smaller
+
+            # Restore the best model state before starting LBFGS
+            if not adam_improved:
                 self.dnn.load_state_dict(best_model_state)
             
             # LBFGS phase
             def closure():
                 self.optimizer_LBFGS.zero_grad()
-                loss = self.loss_func()
+                loss, loss_u, loss_f = self.loss_func()
                 loss.backward()
                 return loss
 
-            for i in range(lbfgs_iters):
+            for j in range(lbfgs_iters):
                 self.optimizer_LBFGS.step(closure)
 
                 # Track the best model and loss
                 if loss.item() < best_loss:
                     best_loss = loss.item()
                     best_model_state = self.dnn.state_dict().copy()
-
-                # Print the current status in LBFGS phase
-                if self.lbfgs_iter % 100 == 0:
-                    print('LBFGS Iter %d, Alpha: %.2e, Loss: %.3e, Loss_u: %.3e, Loss_f: %.3e' %
-                          (self.lbfgs_iter, self.alpha, loss.item(), loss_u.item(), loss_f.item()))
-                self.lbfgs_iter += 1
 
     def predict(self, X):
         t = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
@@ -289,13 +273,13 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
     
     # Define some parameters
-    Ntrain = 2000
+    Ntrain = 4000
     layers = [3, 20, 20, 20, 20, 20, 20, 20, 20, 4] # layers
 
     # Specify the number of cycles and iterations for Adam and LBFGS
-    NUM_CYCLES = 1000
-    ADAM_ITERS = 50
-    LBFGS_ITERS = 50
+    NUM_CYCLES = 500
+    ADAM_ITERS = 20
+    LBFGS_ITERS = 1 # num of it is defined inside LBFGS
 
     # Extract all data.
     data = np.genfromtxt('../data/beach_1d.csv', delimiter=' ').astype(np.float32) # load data
