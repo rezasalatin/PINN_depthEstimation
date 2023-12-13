@@ -68,7 +68,7 @@ class DNN(torch.nn.Module):
     
 # the physics-guided neural network
 class PhysicsInformedNN():
-    def __init__(self, X_U, U_U, X_all, layers, X_star_min, X_star_max):
+    def __init__(self, X_U, U_U, X_f, layers, X_star_min, X_star_max):
         
         # data
         self.t_u = torch.tensor(X_U[:, 0:1]).float().to(device)
@@ -184,7 +184,7 @@ class PhysicsInformedNN():
         loss_f = torch.mean(f_1**2) + torch.mean(f_2**2) + torch.mean(f_3**2)
         
         weight_u = 1.0
-        weight_f = 1.0
+        weight_f = 100.0
         
         loss = weight_u * loss_u + weight_f * loss_f
                 
