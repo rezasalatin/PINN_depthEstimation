@@ -109,7 +109,7 @@ class PhysicsInformedNN():
             max_iter=50000, 
             max_eval=50000, 
             history_size=50,
-            tolerance_grad=1e-20, 
+            tolerance_grad=1e-10, 
             tolerance_change=1.0 * np.finfo(float).eps,
             line_search_fn="strong_wolfe"
         )
@@ -117,7 +117,7 @@ class PhysicsInformedNN():
         # Define learning rate scheduler for Adam
         self.scheduler_Adam = torch.optim.lr_scheduler.StepLR(
             self.optimizer_Adam, 
-            step_size=5000, 
+            step_size=10000, 
             gamma=0.8
         )
         
@@ -252,9 +252,22 @@ if __name__ == "__main__":
     elapsed = time.time() - start_time                    
     print('Training time: %.4f' % elapsed)
     # Save the results
-    #torch.save(model.state_dict(), '../log/model.ckpt')
+    torch.save(model.dnn.state_dict(), './log/model.ckpt')
     # Testing
-    #model.test()             
+    X_test = np.arange(1024).reshape(-1, 1).astype(np.float64)  # Ensure correct shape
+    Y_test = np.full((1024, 1), 1).astype(np.float64)           # Ensure correct shape
+    T_test = np.full((1024, 1), 200).astype(np.float64)         # Ensure correct shape
+    X_star = np.hstack((T_test, X_test, Y_test))  # Order: t, x, y
+    h_pred, z_pred, u_pred, v_pred = model.predict(X_star)      
+               
+    # Concatenate the predictions for saving
+    predictions = np.hstack([h_pred.detach().cpu().numpy(), 
+                            z_pred.detach().cpu().numpy(), 
+                            u_pred.detach().cpu().numpy(), 
+                            v_pred.detach().cpu().numpy()])
+
+    # Save to a file
+    np.savetxt('predictions.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred,v_pred', comments='')         
                
 
     
