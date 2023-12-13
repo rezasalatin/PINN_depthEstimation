@@ -229,7 +229,6 @@ class PhysicsInformedNN():
         v_pred = hzuv_pred[:, 3:4].to(device)
         return h_pred, z_pred, u_pred, v_pred  # Return the computed predictions
     
-    
 if __name__ == "__main__": 
     
     # Define some parameters
