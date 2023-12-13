@@ -68,24 +68,24 @@ class DNN(torch.nn.Module):
     
 # the physics-guided neural network
 class PhysicsInformedNN():
-    def __init__(self, X_train, U_train, X_all, layers, X_star_min, X_star_max):
+    def __init__(self, X_U, U_U, X_all, layers, X_star_min, X_star_max):
         
         # data
-        self.t_u = torch.tensor(X_train[:, 0:1]).float().to(device)
-        self.x_u = torch.tensor(X_train[:, 1:2]).float().to(device)
-        self.y_u = torch.tensor(X_train[:, 2:3]).float().to(device)
+        self.t_u = torch.tensor(X_U[:, 0:1]).float().to(device)
+        self.x_u = torch.tensor(X_U[:, 1:2]).float().to(device)
+        self.y_u = torch.tensor(X_U[:, 2:3]).float().to(device)
 
         self.vals_min = torch.tensor(X_star_min).float().to(device)
         self.vals_max = torch.tensor(X_star_max).float().to(device)
         
-        self.h_u = torch.tensor(U_train[:, 0:1]).float().to(device)
-        self.z_u = torch.tensor(U_train[:, 1:2]).float().to(device)
-        self.u_u = torch.tensor(U_train[:, 2:3]).float().to(device)
-        self.v_u = torch.tensor(U_train[:, 3:4]).float().to(device)
+        self.h_u = torch.tensor(U_U[:, 0:1]).float().to(device)
+        self.z_u = torch.tensor(U_U[:, 1:2]).float().to(device)
+        self.u_u = torch.tensor(U_U[:, 2:3]).float().to(device)
+        self.v_u = torch.tensor(U_U[:, 3:4]).float().to(device)
         
-        self.t_f = torch.tensor(X_all[:, 0:1], requires_grad=True).float().to(device)
-        self.x_f = torch.tensor(X_all[:, 1:2], requires_grad=True).float().to(device)
-        self.y_f = torch.tensor(X_all[:, 2:3], requires_grad=True).float().to(device)
+        self.t_f = torch.tensor(X_f[:, 0:1], requires_grad=True).float().to(device)
+        self.x_f = torch.tensor(X_f[:, 1:2], requires_grad=True).float().to(device)
+        self.y_f = torch.tensor(X_f[:, 2:3], requires_grad=True).float().to(device)
                 
         self.layers = layers
         
@@ -200,7 +200,7 @@ class PhysicsInformedNN():
         self.dnn.train()
 
         # First phase of training with Adam
-        for i in range(1000):  # 50,000 iterations
+        for i in range(50000):  # 50,000 iterations
             self.optimizer_Adam.zero_grad()  # Zero gradients for Adam optimizer
             loss = self.loss_func()
             loss.backward()
@@ -244,20 +244,17 @@ if __name__ == "__main__":
     u_all = data[:, 5:6].astype(np.float64)
     v_all = data[:, 6:7].astype(np.float64)
     
-    X_star = np.hstack((t_all, x_all, y_all))
+    X_star = np.hstack((t_all, x_all, y_all, h_all, z_all, u_all, v_all))
     # get data range for normalization
     X_star_min = np.min(X_star, axis=0)
     X_star_max = np.max(X_star, axis=0)
-
-    U_star = np.hstack((h_all, z_all, u_all, v_all))
     
     idx = np.random.choice(X_star.shape[0], Ntrain, replace=False)
     
     # make a 1d list of data we have
     X_star_train = X_star[idx, :]       # inputs (t,x,y)
-    U_star_train = U_star[idx, :]       # exact outputs (h,z,u,v)
     
-    model = PhysicsInformedNN(X_star_train, U_star_train, X_star, layers, X_star_min, X_star_max)
+    model = PhysicsInformedNN(X_star_train, X_star, layers, X_star_min, X_star_max)
     model.init_optimizers()  # Initialize optimizers
     # Training
     start_time = time.time()
@@ -280,7 +277,5 @@ if __name__ == "__main__":
                             v_pred.detach().cpu().numpy()])
 
     # Save to a file
-    np.savetxt('predictions.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred,v_pred', comments='')         
+    np.savetxt('../data/predictions.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred,v_pred', comments='')         
                
-
-    
