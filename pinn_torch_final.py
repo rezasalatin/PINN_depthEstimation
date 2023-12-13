@@ -232,8 +232,8 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
     
     # Define some parameters
-    Ntrain = 1000
-    layers = [3, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 4] # layers
+    Ntrain = 3000
+    layers = [3, 30, 30, 30, 30, 30, 30, 30, 30, 4] # layers
     # Extract all data.
     data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
