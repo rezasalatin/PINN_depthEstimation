@@ -107,10 +107,10 @@ class PhysicsInformedNN():
             self.dnn.parameters(), 
             lr=1.0, 
             max_iter=50000, 
-            max_eval=50000, 
-            history_size=50,
-            tolerance_grad=1e-10, 
-            tolerance_change=1.0 * np.finfo(float).eps,
+            max_eval=62500, 
+            history_size=100,
+            tolerance_grad=1e-7, 
+            tolerance_change=1e-9,
             line_search_fn="strong_wolfe"
         )
 
@@ -233,7 +233,7 @@ if __name__ == "__main__":
     
     # Define some parameters
     Ntrain = 1000
-    layers = [3, 20, 20, 20, 20, 20, 4] # layers
+    layers = [3, 30, 30, 30, 30, 30, 4] # layers
     # Extract all data.
     data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
