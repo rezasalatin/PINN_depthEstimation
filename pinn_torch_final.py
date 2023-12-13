@@ -216,6 +216,20 @@ class PhysicsInformedNN():
         
         self.optimizer_LBFGS.step(closure)
     
+    def predict(self, X):
+        t = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
+        x = torch.tensor(X[:, 1:2], requires_grad=True).float().to(device)
+        y = torch.tensor(X[:, 2:3], requires_grad=True).float().to(device)
+
+        hzuv_pred = self.net_u(t, x, y)
+        
+        h_pred = hzuv_pred[:, 0:1].to(device)
+        z_pred = hzuv_pred[:, 1:2].to(device)
+        u_pred = hzuv_pred[:, 2:3].to(device)
+        v_pred = hzuv_pred[:, 3:4].to(device)
+        return h_pred, z_pred, u_pred, v_pred  # Return the computed predictions
+    
+    
 if __name__ == "__main__": 
     
     # Define some parameters
