@@ -109,7 +109,7 @@ class PhysicsInformedNN():
             max_iter=50000, 
             max_eval=50000, 
             history_size=50,
-            tolerance_grad=1e-10, 
+            tolerance_grad=1e-20, 
             tolerance_change=1.0 * np.finfo(float).eps,
             line_search_fn="strong_wolfe"
         )
