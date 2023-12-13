@@ -110,8 +110,8 @@ class PhysicsInformedNN():
         self.optimizer_LBFGS = torch.optim.LBFGS(
             self.dnn.parameters(), 
             lr=1.0, 
-            max_iter=80, 
-            max_eval=80, 
+            max_iter=50000, 
+            max_eval=50000, 
             history_size=50,
             tolerance_grad=1e-10, 
             tolerance_change=1.0 * np.finfo(float).eps,
@@ -232,15 +232,13 @@ class PhysicsInformedNN():
             if adam_improved:
                 for param_group in self.optimizer_Adam.param_groups:
                     new_lr = param_group['lr'] * 0.8  # Calculate the new learning rate
-                    param_group['lr'] = max(new_lr, 1e-6)  # Set to new_lr or max_lr, whichever is smaller
+                    param_group['lr'] = max(new_lr, 1e-6)  # Set to new_lr or max_lr, whichever is larger
             else:
                 for param_group in self.optimizer_Adam.param_groups:
                     new_lr = param_group['lr'] / 0.8  # Calculate the new learning rate
-                    param_group['lr'] = max(new_lr, 1e-4)  # Set to new_lr or max_lr, whichever is smaller
-
+                    param_group['lr'] = min(new_lr, 1e-4)  # Set to new_lr or max_lr, whichever is smaller
             # Restore the best model state before starting LBFGS
-            if not adam_improved:
-                self.dnn.load_state_dict(best_model_state)
+            self.dnn.load_state_dict(best_model_state)
             
             # LBFGS phase
             def closure():
@@ -251,11 +249,16 @@ class PhysicsInformedNN():
 
             for j in range(lbfgs_iters):
                 self.optimizer_LBFGS.step(closure)
-
                 # Track the best model and loss
                 if loss.item() < best_loss:
                     best_loss = loss.item()
                     best_model_state = self.dnn.state_dict().copy()
+
+            current_lr = self.optimizer_Adam.param_groups[0]['lr']
+            print(
+                'Iter %d, Loss: %.3e' % 
+                (self.iter, loss.item())
+            )
 
     def predict(self, X):
         t = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
@@ -273,12 +276,12 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
     
     # Define some parameters
-    Ntrain = 4000
-    layers = [3, 20, 20, 20, 20, 20, 20, 20, 20, 4] # layers
+    Ntrain = 5000
+    layers = [3, 30, 30, 30, 30, 30, 30, 30, 30, 4] # layers
 
     # Specify the number of cycles and iterations for Adam and LBFGS
-    NUM_CYCLES = 500
-    ADAM_ITERS = 20
+    NUM_CYCLES = 1
+    ADAM_ITERS = 1000
     LBFGS_ITERS = 1 # num of it is defined inside LBFGS
 
     # Extract all data.
