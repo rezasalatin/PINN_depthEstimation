@@ -149,7 +149,7 @@ class PhysicsInformedNN():
         z_pred = output_u_pred[:, 1:2].to(device)
         u_pred = output_u_pred[:, 2:3].to(device)
         
-        weight_h = 1.0
+        weight_h = 1000.0
         weight_z = 1.0
         weight_u = 1.0
 
@@ -198,7 +198,7 @@ class PhysicsInformedNN():
         self.dnn.train()
 
         # First phase of training with Adam
-        for i in range(10000):  # number of iterations
+        for i in range(1000):  # number of iterations
             self.optimizer_Adam.zero_grad()  # Zero gradients for Adam optimizer
             loss = self.loss_func()
             loss.backward()
