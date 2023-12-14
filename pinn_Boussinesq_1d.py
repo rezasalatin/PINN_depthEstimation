@@ -146,13 +146,15 @@ class PhysicsInformedNN():
         z_pred = output_u_pred[:, 1:2].to(device)
         u_pred = output_u_pred[:, 2:3].to(device)
         
-        weight_h = 1
-        weight_z = 100
-        weight_u = 100
-                
-        loss_u = weight_h * torch.mean((self.h_u - h_pred)**2) + \
-            weight_z * torch.mean((self.z_u - z_pred)**2) + \
-            weight_u * torch.mean((self.u_u - u_pred)**2)
+        weight_h = 1.0
+        weight_z = 1.0
+        weight_u = 1.0
+
+        loss_comp_h = weight_h * torch.mean((self.h_u - h_pred)**2)
+        loss_comp_z = weight_z * torch.mean((self.z_u - z_pred)**2)
+        loss_comp_u = weight_u * torch.mean((self.u_u - u_pred)**2)
+
+        loss_u = weight_h * loss_comp_h + weight_z * loss_comp_z + weight_u * loss_comp_u
         
         # Physics 
         output_f_pred = self.net_u(self.t_f, self.x_f)
@@ -181,8 +183,11 @@ class PhysicsInformedNN():
         self.iter += 1
         if self.iter % 100 == 0:
             print(
-                'Iter %d, Loss_u: %.5e, Loss_f: %.5e, Total Loss: %.5e' % (self.iter, loss_u.item(), loss_f.item(), loss.item())
-            )
+                'Iter %d, Loss_u: %.5e, Loss_f: %.5e, Total Loss: %.5e' % 
+                (self.iter, loss_u.item(), loss_f.item(), loss.item()))
+            print(
+                'Loss_h: %.5e, Loss_z: %.5e, Loss_u: %.5e' % 
+                (loss_comp_h.item(), loss_comp_z.item(), loss_comp_u.item()))
 
         return loss
     
@@ -228,8 +233,8 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
     
     # Define some parameters
-    Ntrain = 20000
-    layers = [2, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 3] # layers
+    Ntrain = 50000
+    layers = [2, 50, 50, 50, 50, 3] # layers
     # Extract all data.
     data = np.genfromtxt('../data/beach_1d_dt001.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
