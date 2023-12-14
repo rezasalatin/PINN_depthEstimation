@@ -9,6 +9,7 @@ import torch
 from collections import OrderedDict
 import numpy as np
 import time
+import scipy.io
 
 np.random.seed(1234)
 
@@ -79,8 +80,9 @@ class PhysicsInformedNN():
         self.u_u = torch.tensor(X_u[:, 5:6]).float().to(device)
         
         self.t_f = torch.tensor(X_f[:, 0:1], requires_grad=True).float().to(device)
-        self.x_f = torch.tensor(X_f[:, 1:2], requires_grad=True).float().to(device)
-
+        self.x_f = torch.tensor(X_f[:, 1:2], requires_grad=True).float().to(device)        
+        self.z_f = torch.tensor(X_f[:, 4:5]).float().to(device)
+        
         self.layers = layers
 
         self.vals_min = torch.tensor(X_min).float().to(device)
@@ -118,13 +120,14 @@ class PhysicsInformedNN():
             gamma=0.8
         )
         
-    def net_u(self, t, x):  
+    def net_u(self, t, x, z):  
 
         # input normalization between -1 and 1
         t = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
         x = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
+        z = 2.0 * (z - self.vals_min[4])/(self.vals_max[4]-self.vals_min[4]) - 1.0
         
-        output = self.dnn(torch.cat([t, x], dim=1))
+        output = self.dnn(torch.cat([t, x, z], dim=1))
         return output
     
     # compute gradients for the pinn
@@ -140,7 +143,7 @@ class PhysicsInformedNN():
     
     def loss_func(self):
         
-        output_u_pred = self.net_u(self.t_u, self.x_u)
+        output_u_pred = self.net_u(self.t_u, self.x_u, self.z_u)
         
         h_pred = output_u_pred[:, 0:1].to(device)
         z_pred = output_u_pred[:, 1:2].to(device)
@@ -157,7 +160,7 @@ class PhysicsInformedNN():
         loss_u = weight_h * loss_comp_h + weight_z * loss_comp_z + weight_u * loss_comp_u
         
         # Physics 
-        output_f_pred = self.net_u(self.t_f, self.x_f)
+        output_f_pred = self.net_u(self.t_f, self.x_f, self.z_f)
 
         h_pred = output_f_pred[:, 0:1].to(device)
         z_pred = output_f_pred[:, 1:2].to(device)
@@ -218,12 +221,14 @@ class PhysicsInformedNN():
     def predict(self, X):
         t = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
         x = torch.tensor(X[:, 1:2], requires_grad=True).float().to(device)
+        z = torch.tensor(X[:, 4:5]).float().to(device)
         
         # testing data normalization between -1 and 1
         t = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
         x = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
+        z = 2.0 * (z - self.vals_min[4])/(self.vals_max[4]-self.vals_min[4]) - 1.0
 
-        output_pred = self.net_u(t, x)
+        output_pred = self.net_u(t, x, z)
         
         h_pred = output_pred[:, 0:1].to(device)
         z_pred = output_pred[:, 1:2].to(device)
@@ -231,10 +236,10 @@ class PhysicsInformedNN():
         return h_pred, z_pred, u_pred  # Return the computed predictions
     
 if __name__ == "__main__": 
-    
+       
     # Define some parameters
     Ntrain = 50000
-    layers = [2, 50, 50, 50, 50, 3] # layers
+    layers = [3, 50, 50, 50, 50, 3] # layers
     # Extract all data.
     data = np.genfromtxt('../data/beach_1d_dt001.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
@@ -268,6 +273,11 @@ if __name__ == "__main__":
     # Testing
     T_test = np.full((1024, 1), 300).astype(np.float64)         # Ensure correct shape
     X_test = np.arange(1024).reshape(-1, 1).astype(np.float64)  # Ensure correct shape
+    
+    Z_test = scipy.io.loadmat('./z_real.mat')
+    Z_test = Z_test['z_real']
+    Z_test = Z_test.reshape(1024, 1)
+    
     X_star = np.hstack((T_test, X_test))  # Order: t, x, y
     h_pred, z_pred, u_pred = model.predict(X_star)
 
