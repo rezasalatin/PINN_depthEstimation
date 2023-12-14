@@ -278,7 +278,7 @@ if __name__ == "__main__":
     Z_test = Z_test['z_real']
     Z_test = Z_test.reshape(1024, 1)
     
-    X_star = np.hstack((T_test, X_test))  # Order: t, x, y
+    X_star = np.hstack((T_test, X_test, Z_test))  # Order: t, x, y
     h_pred, z_pred, u_pred = model.predict(X_star)
 
     # Concatenate the predictions for saving
