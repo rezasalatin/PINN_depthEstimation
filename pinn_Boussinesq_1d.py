@@ -221,7 +221,7 @@ class PhysicsInformedNN():
     def predict(self, X):
         t = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
         x = torch.tensor(X[:, 1:2], requires_grad=True).float().to(device)
-        z = torch.tensor(X[:, 4:5]).float().to(device)
+        z = torch.tensor(X[:, 2:3]).float().to(device)
         
         # testing data normalization between -1 and 1
         t = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
