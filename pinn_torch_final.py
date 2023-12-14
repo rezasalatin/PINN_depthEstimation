@@ -68,26 +68,26 @@ class DNN(torch.nn.Module):
     
 # the physics-guided neural network
 class PhysicsInformedNN():
-    def __init__(self, X_U, U_U, X_f, layers, X_star_min, X_star_max):
+    def __init__(self, X_U, X_f, layers, X_min, X_max):
         
         # data
         self.t_u = torch.tensor(X_U[:, 0:1]).float().to(device)
         self.x_u = torch.tensor(X_U[:, 1:2]).float().to(device)
-        self.y_u = torch.tensor(X_U[:, 2:3]).float().to(device)
+        self.y_u = torch.tensor(X_U[:, 2:3]).float().to(device) 
 
-        self.vals_min = torch.tensor(X_star_min).float().to(device)
-        self.vals_max = torch.tensor(X_star_max).float().to(device)
-        
-        self.h_u = torch.tensor(U_U[:, 0:1]).float().to(device)
-        self.z_u = torch.tensor(U_U[:, 1:2]).float().to(device)
-        self.u_u = torch.tensor(U_U[:, 2:3]).float().to(device)
-        self.v_u = torch.tensor(U_U[:, 3:4]).float().to(device)
+        self.h_u = torch.tensor(X_U[:, 3:4]).float().to(device)
+        self.z_u = torch.tensor(X_U[:, 4:5]).float().to(device)
+        self.u_u = torch.tensor(X_U[:, 5:6]).float().to(device)
+        self.v_u = torch.tensor(X_U[:, 6:7]).float().to(device)
         
         self.t_f = torch.tensor(X_f[:, 0:1], requires_grad=True).float().to(device)
         self.x_f = torch.tensor(X_f[:, 1:2], requires_grad=True).float().to(device)
         self.y_f = torch.tensor(X_f[:, 2:3], requires_grad=True).float().to(device)
-                
+
         self.layers = layers
+
+        self.vals_min = torch.tensor(X_min).float().to(device)
+        self.vals_max = torch.tensor(X_max).float().to(device)
         
         # deep neural networks
         self.dnn = DNN(layers).to(device)
@@ -126,10 +126,10 @@ class PhysicsInformedNN():
         # input normalization between -1 and 1
         t = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
         x = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
-        #y = 2.0 * (y - self.vals_min[2])/(self.vals_max[2]-self.vals_min[2]) - 1.0
+        y = y #2.0 * (y - self.vals_min[2])/(self.vals_max[2]-self.vals_min[2]) - 1.0
         
-        hzuv = self.dnn(torch.cat([t, x, y], dim=1))
-        return hzuv
+        output = self.dnn(torch.cat([t, x, y], dim=1))
+        return output
     
     # compute gradients for the pinn
     def compute_gradient(self, pred, var):
@@ -144,12 +144,12 @@ class PhysicsInformedNN():
     
     def loss_func(self):
         
-        hzuv_u_pred = self.net_u(self.t_u, self.x_u, self.y_u)
+        output_u_pred = self.net_u(self.t_u, self.x_u, self.y_u)
         
-        h_pred = hzuv_u_pred[:, 0:1].to(device)
-        z_pred = hzuv_u_pred[:, 1:2].to(device)
-        u_pred = hzuv_u_pred[:, 2:3].to(device)
-        v_pred = hzuv_u_pred[:, 3:4].to(device)
+        h_pred = output_u_pred[:, 0:1].to(device)
+        z_pred = output_u_pred[:, 1:2].to(device)
+        u_pred = output_u_pred[:, 2:3].to(device)
+        v_pred = output_u_pred[:, 3:4].to(device)
                 
         loss_u = torch.mean((self.h_u - h_pred)**2) + \
             torch.mean((self.z_u - z_pred)**2) + \
@@ -157,12 +157,12 @@ class PhysicsInformedNN():
             torch.mean((self.v_u - v_pred)**2)
 
         # Physics 
-        hzuv_f_pred = self.net_u(self.t_f, self.x_f, self.y_f)
+        output_f_pred = self.net_u(self.t_f, self.x_f, self.y_f)
 
-        h_pred = hzuv_f_pred[:, 0:1].to(device)
-        z_pred = hzuv_f_pred[:, 1:2].to(device)
-        u_pred = hzuv_f_pred[:, 2:3].to(device)
-        v_pred = hzuv_f_pred[:, 3:4].to(device)
+        h_pred = output_f_pred[:, 0:1].to(device)
+        z_pred = output_f_pred[:, 1:2].to(device)
+        u_pred = output_f_pred[:, 2:3].to(device)
+        v_pred = output_f_pred[:, 3:4].to(device)
             
         u_t = self.compute_gradient(u_pred, self.t_f)
         u_x = self.compute_gradient(u_pred, self.x_f)
@@ -184,7 +184,7 @@ class PhysicsInformedNN():
         loss_f = torch.mean(f_1**2) + torch.mean(f_2**2) + torch.mean(f_3**2)
         
         weight_u = 1.0
-        weight_f = 100.0
+        weight_f = 1.0
         
         loss = weight_u * loss_u + weight_f * loss_f
                 
@@ -200,7 +200,7 @@ class PhysicsInformedNN():
         self.dnn.train()
 
         # First phase of training with Adam
-        for i in range(50000):  # 50,000 iterations
+        for i in range(1000):  # number of iterations
             self.optimizer_Adam.zero_grad()  # Zero gradients for Adam optimizer
             loss = self.loss_func()
             loss.backward()
@@ -215,27 +215,31 @@ class PhysicsInformedNN():
             return loss
         
         self.optimizer_LBFGS.step(closure)
+
+        # Print final loss after training
+        final_loss = self.loss_func()  # Get the final loss
+        print('Final Iter %d, Total Loss: %.5e' % (self.iter, final_loss.item()))
     
     def predict(self, X):
         t = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
         x = torch.tensor(X[:, 1:2], requires_grad=True).float().to(device)
         y = torch.tensor(X[:, 2:3], requires_grad=True).float().to(device)
 
-        hzuv_pred = self.net_u(t, x, y)
+        output_pred = self.net_u(t, x, y)
         
-        h_pred = hzuv_pred[:, 0:1].to(device)
-        z_pred = hzuv_pred[:, 1:2].to(device)
-        u_pred = hzuv_pred[:, 2:3].to(device)
-        v_pred = hzuv_pred[:, 3:4].to(device)
+        h_pred = output_pred[:, 0:1].to(device)
+        z_pred = output_pred[:, 1:2].to(device)
+        u_pred = output_pred[:, 2:3].to(device)
+        v_pred = output_pred[:, 3:4].to(device)
         return h_pred, z_pred, u_pred, v_pred  # Return the computed predictions
     
 if __name__ == "__main__": 
     
     # Define some parameters
-    Ntrain = 3000
-    layers = [3, 30, 30, 30, 30, 30, 30, 30, 30, 4] # layers
+    Ntrain = 20000
+    layers = [3, 20, 20, 20, 20, 20, 20, 20, 20, 4] # layers
     # Extract all data.
-    data = np.genfromtxt('../data/beach_2d.csv', delimiter=' ').astype(np.float32) # load data
+    data = np.genfromtxt('../data/beach_1d_dt001.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
     x_all = data[:, 1:2].astype(np.float64)
     y_all = data[:, 2:3].astype(np.float64)
@@ -252,9 +256,10 @@ if __name__ == "__main__":
     idx = np.random.choice(X_star.shape[0], Ntrain, replace=False)
     
     # make a 1d list of data we have
-    X_star_train = X_star[idx, :]       # inputs (t,x,y)
+    X_u_star = X_star[idx,:]       # inputs (t,x,y)
+    X_f_star = X_star               # inputs for residuals (t,x,y)
     
-    model = PhysicsInformedNN(X_star_train, X_star, layers, X_star_min, X_star_max)
+    model = PhysicsInformedNN(X_u_star, X_f_star, layers, X_star_min, X_star_max)
     model.init_optimizers()  # Initialize optimizers
     # Training
     start_time = time.time()
@@ -264,12 +269,12 @@ if __name__ == "__main__":
     # Save the results
     torch.save(model.dnn.state_dict(), './log/model.ckpt')
     # Testing
+    T_test = np.full((1024, 1), 200).astype(np.float64)         # Ensure correct shape
     X_test = np.arange(1024).reshape(-1, 1).astype(np.float64)  # Ensure correct shape
     Y_test = np.full((1024, 1), 1).astype(np.float64)           # Ensure correct shape
-    T_test = np.full((1024, 1), 200).astype(np.float64)         # Ensure correct shape
     X_star = np.hstack((T_test, X_test, Y_test))  # Order: t, x, y
     h_pred, z_pred, u_pred, v_pred = model.predict(X_star)      
-               
+
     # Concatenate the predictions for saving
     predictions = np.hstack([h_pred.detach().cpu().numpy(), 
                             z_pred.detach().cpu().numpy(), 
