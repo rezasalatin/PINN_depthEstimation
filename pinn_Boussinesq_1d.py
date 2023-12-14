@@ -98,7 +98,7 @@ class PhysicsInformedNN():
         # Adam optimizer
         self.optimizer_Adam = torch.optim.Adam(
             self.dnn.parameters(), 
-            lr=1e-4 # learning rate
+            lr=1e-5 # learning rate
         )
 
         # L-BFGS optimizer
@@ -198,7 +198,7 @@ class PhysicsInformedNN():
         self.dnn.train()
 
         # First phase of training with Adam
-        for i in range(1000):  # number of iterations
+        for i in range(10000):  # number of iterations
             self.optimizer_Adam.zero_grad()  # Zero gradients for Adam optimizer
             loss = self.loss_func()
             loss.backward()
@@ -238,8 +238,8 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
        
     # Define some parameters
-    Ntrain = 50000
-    layers = [3, 50, 50, 50, 50, 3] # layers
+    Ntrain = 20000
+    layers = [3, 50, 50, 50, 50, 50, 50, 50, 50, 3] # layers
     # Extract all data.
     data = np.genfromtxt('../data/beach_1d_dt001.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
