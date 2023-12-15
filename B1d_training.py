@@ -8,8 +8,8 @@ w/ Pytorch
 import torch
 from collections import OrderedDict
 import numpy as np
-import scipy.io
 import time
+import matplotlib.pyplot as plt
 
 np.random.seed(1234)
 
@@ -280,23 +280,60 @@ if __name__ == "__main__":
 
     # Testing
     X_test = np.arange(1024).reshape(-1, 1).astype(np.float64)  # Ensure correct shape
+    
+    h_file = f'../funwave/dep.out'  # Construct the file name
+    h_data = np.loadtxt(h_file)
+    h_real = h_data[1, :]  # Select the second row
+    h_real = h_real.reshape(1024, 1)
 
     for t in range(200,401):
         T_test = np.full((1024, 1), t).astype(np.float64)       # Ensure correct shape
 
         file_suffix = str(t).zfill(5)  # Pad the number with zeros to make it 5 digits
-        file_name = f'../funwave/eta_{file_suffix}'  # Construct the file name
-        Z_data = np.loadtxt(file_name)
+        
+        Z_file = f'../funwave/eta_{file_suffix}'  # Construct the file name
+        Z_data = np.loadtxt(Z_file)
         Z_test = Z_data[1, :]  # Select the second row
         Z_test = Z_test.reshape(1024, 1)
         
+        U_file = f'../funwave/u_{file_suffix}'  # Construct the file name
+        U_data = np.loadtxt(U_file)
+        u_real = U_data[1, :]  # Select the second row
+        u_real = u_real.reshape(1024, 1)
+        
         X_star = np.hstack((T_test, X_test, Z_test))  # Order: t, x, y
+        
         h_pred, z_pred, u_pred = model.predict(X_star)
-
+        
+        h_pred = h_pred.detach().cpu().numpy()
+        z_pred = z_pred.detach().cpu().numpy()
+        u_pred = u_pred.detach().cpu().numpy()
+        
+        # Plotting
+        plt.figure(figsize=(12, 6))
+        
+        # Plot u-predictions (dashed blue) and u-real (solid blue)
+        plt.plot(X_test, u_pred, 'b--', label='u-prediction')
+        plt.plot(X_test, u_real, 'b', label='u-real')  # Replace u_real with actual data
+        
+        # Plot h-predictions (dashed black) and h-real (solid black)
+        plt.plot(X_test, -h_pred, 'k--', label='h-prediction')
+        plt.plot(X_test, -h_real, 'k', label='h-real')  # Replace h_real with actual data
+        
+        plt.xlabel('X (m)', fontsize=14)  # Set larger font size for X label
+        plt.ylabel('Values', fontsize=14)  # Set larger font size for Y label
+        plt.title(f'Time: {t}s', fontsize=16)  # Set larger font size for title
+        plt.legend(fontsize=12)  # Set larger font size for legend
+        
+        # Save the plot with file number in the filename
+        plt.savefig(f'../plots/predictions_{file_suffix}.png')
+        
+        plt.show()
+        
+        plt.close()  # Close the plot to free up memory
+        
         # Concatenate the predictions for saving
-        predictions = np.hstack([h_pred.detach().cpu().numpy(), 
-                                z_pred.detach().cpu().numpy(), 
-                                u_pred.detach().cpu().numpy()])
+        predictions = np.hstack([h_pred, z_pred, u_pred])
 
         # Save to a file
-        np.savetxt(f'../pinn_data/predictions_{file_suffix}.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred', comments='')
+        # np.savetxt(f'../pinn_data/predictions_{file_suffix}.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred', comments='')
