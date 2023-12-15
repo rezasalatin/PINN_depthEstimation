@@ -8,8 +8,8 @@ w/ Pytorch
 import torch
 from collections import OrderedDict
 import numpy as np
-import time
 import scipy.io
+import time
 
 np.random.seed(1234)
 
@@ -149,13 +149,13 @@ class PhysicsInformedNN():
         z_pred = output_u_pred[:, 1:2].to(device)
         u_pred = output_u_pred[:, 2:3].to(device)
         
-        weight_h = 1000.0
+        weight_h = 1.0
         weight_z = 1.0
         weight_u = 1.0
 
-        loss_comp_h = weight_h * torch.mean((self.h_u - h_pred)**2)
-        loss_comp_z = weight_z * torch.mean((self.z_u - z_pred)**2)
-        loss_comp_u = weight_u * torch.mean((self.u_u - u_pred)**2)
+        loss_comp_h = torch.mean((self.h_u - h_pred)**2)
+        loss_comp_z = torch.mean((self.z_u - z_pred)**2)
+        loss_comp_u = torch.mean((self.u_u - u_pred)**2)
 
         loss_u = weight_h * loss_comp_h + weight_z * loss_comp_z + weight_u * loss_comp_u
         
@@ -179,7 +179,7 @@ class PhysicsInformedNN():
         loss_f = torch.mean(f_1**2) + torch.mean(f_2**2)
         
         weight_loss_u = 1.0
-        weight_loss_f = 1.0
+        weight_loss_f = 0.0
         
         loss = weight_loss_u * loss_u + weight_loss_f * loss_f
                 
@@ -224,9 +224,9 @@ class PhysicsInformedNN():
         z = torch.tensor(X[:, 2:3]).float().to(device)
         
         # testing data normalization between -1 and 1
-        t = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
-        x = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
-        z = 2.0 * (z - self.vals_min[4])/(self.vals_max[4]-self.vals_min[4]) - 1.0
+        #t = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
+        #x = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
+        #z = 0.0 * (z - self.vals_min[4])/(self.vals_max[4]-self.vals_min[4]) - 0.0
 
         output_pred = self.net_u(t, x, z)
         
@@ -238,8 +238,14 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
        
     # Define some parameters
-    Ntrain = 20000
-    layers = [3, 50, 50, 50, 50, 50, 50, 50, 50, 3] # layers
+    Ntrain = 100
+    input_features = 3
+    hidden_layers = 20
+    hidden_width = 20
+    output_features = 3
+
+    # Construct the layers list
+    layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
     # Extract all data.
     data = np.genfromtxt('../data/beach_1d_dt001.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
@@ -271,7 +277,7 @@ if __name__ == "__main__":
     # Save the results
     torch.save(model.dnn.state_dict(), './log/model.ckpt')
     # Testing
-    T_test = np.full((1024, 1), 300).astype(np.float64)         # Ensure correct shape
+    T_test = np.full((1024, 1), 200).astype(np.float64)         # Ensure correct shape
     X_test = np.arange(1024).reshape(-1, 1).astype(np.float64)  # Ensure correct shape
     
     Z_test = scipy.io.loadmat('./z_real.mat')
