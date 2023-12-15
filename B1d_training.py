@@ -1,5 +1,5 @@
 """
-PINN with torch v2
+PINN training for Boussinesq 1d
 @author: Reza Salatin
 December 2023
 w/ Pytorch
@@ -179,7 +179,7 @@ class PhysicsInformedNN():
         loss_f = torch.mean(f_1**2) + torch.mean(f_2**2)
         
         weight_loss_u = 1.0
-        weight_loss_f = 0.0
+        weight_loss_f = 1.0
         
         loss = weight_loss_u * loss_u + weight_loss_f * loss_f
                 
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     # Construct the layers list
     layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
     # Extract all data.
-    data = np.genfromtxt('../data/beach_1d_dt001.csv', delimiter=' ').astype(np.float32) # load data
+    data = np.genfromtxt('../pinn_data/beach_1d_dt001.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
     x_all = data[:, 1:2].astype(np.float64)
     y_all = data[:, 2:3].astype(np.float64)
@@ -275,22 +275,28 @@ if __name__ == "__main__":
     elapsed = time.time() - start_time                    
     print('Training time: %.4f' % elapsed)
     # Save the results
-    torch.save(model.dnn.state_dict(), './log/model.ckpt')
+    torch.save(model.dnn.state_dict(), '../pinn_log/model.ckpt')  # only the parameter
+    torch.save(model.dnn, '../pinn_log/complete_model.pth')       # entire model
+
     # Testing
-    T_test = np.full((1024, 1), 200).astype(np.float64)         # Ensure correct shape
     X_test = np.arange(1024).reshape(-1, 1).astype(np.float64)  # Ensure correct shape
-    
-    Z_test = scipy.io.loadmat('./z_real.mat')
-    Z_test = Z_test['z_real']
-    Z_test = Z_test.reshape(1024, 1)
-    
-    X_star = np.hstack((T_test, X_test, Z_test))  # Order: t, x, y
-    h_pred, z_pred, u_pred = model.predict(X_star)
 
-    # Concatenate the predictions for saving
-    predictions = np.hstack([h_pred.detach().cpu().numpy(), 
-                            z_pred.detach().cpu().numpy(), 
-                            u_pred.detach().cpu().numpy()])
+    for t in range(200,401):
+        T_test = np.full((1024, 1), t).astype(np.float64)       # Ensure correct shape
 
-    # Save to a file
-    np.savetxt('../data/predictions.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred', comments='')
+        file_suffix = str(t).zfill(5)  # Pad the number with zeros to make it 5 digits
+        file_name = f'../funwave/eta_{file_suffix}'  # Construct the file name
+        Z_data = np.loadtxt(file_name)
+        Z_test = Z_data[1, :]  # Select the second row
+        Z_test = Z_test.reshape(1024, 1)
+        
+        X_star = np.hstack((T_test, X_test, Z_test))  # Order: t, x, y
+        h_pred, z_pred, u_pred = model.predict(X_star)
+
+        # Concatenate the predictions for saving
+        predictions = np.hstack([h_pred.detach().cpu().numpy(), 
+                                z_pred.detach().cpu().numpy(), 
+                                u_pred.detach().cpu().numpy()])
+
+        # Save to a file
+        np.savetxt(f'../pinn_data/predictions_{file_suffix}.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred', comments='')
