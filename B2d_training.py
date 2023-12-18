@@ -238,7 +238,7 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
        
     # Define some parameters
-    Ntrain = 100
+    Ntrain = 1000
     input_features = 3
     hidden_layers = 20
     hidden_width = 20
