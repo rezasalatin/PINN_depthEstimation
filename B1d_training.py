@@ -281,7 +281,7 @@ if __name__ == "__main__":
     # Testing
     X_test = np.arange(1024).reshape(-1, 1).astype(np.float64)  # Ensure correct shape
     
-    h_file = f'../funwave/dep.out'  # Construct the file name
+    h_file = f'../funwave_irr/dep.out'  # Construct the file name
     h_data = np.loadtxt(h_file)
     h_real = h_data[1, :]  # Select the second row
     h_real = h_real.reshape(1024, 1)
@@ -291,12 +291,12 @@ if __name__ == "__main__":
 
         file_suffix = str(t).zfill(5)  # Pad the number with zeros to make it 5 digits
         
-        Z_file = f'../funwave/eta_{file_suffix}'  # Construct the file name
+        Z_file = f'../funwave_irr/eta_{file_suffix}'  # Construct the file name
         Z_data = np.loadtxt(Z_file)
         Z_test = Z_data[1, :]  # Select the second row
         Z_test = Z_test.reshape(1024, 1)
         
-        U_file = f'../funwave/u_{file_suffix}'  # Construct the file name
+        U_file = f'../funwave_irr/u_{file_suffix}'  # Construct the file name
         U_data = np.loadtxt(U_file)
         u_real = U_data[1, :]  # Select the second row
         u_real = u_real.reshape(1024, 1)
@@ -326,7 +326,7 @@ if __name__ == "__main__":
         plt.legend(fontsize=12)  # Set larger font size for legend
         
         # Save the plot with file number in the filename
-        plt.savefig(f'../plots/predictions_{file_suffix}.png')
+        plt.savefig(f'../plots_irr/predictions_{file_suffix}.png')
         
         plt.show()
         
