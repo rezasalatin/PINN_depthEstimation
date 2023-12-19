@@ -264,14 +264,14 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
        
     # Define training points + iterations for Adam and LBFGS
-    Ntrain = 1000
-    AdamIt = 1000
+    Ntrain = 10000
+    AdamIt = 10000
     LBFGSIt = 50000
     
     # Define input, hidden, and output layers
     input_features = 4 # t, x, y, eta
-    hidden_layers = 20
-    hidden_width = 20
+    hidden_layers = 5
+    hidden_width = 8
     output_features = 4 # h, eta, u, v
     layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
     
@@ -298,7 +298,7 @@ if __name__ == "__main__":
     X_f_star = X_star
     
     # set up the pinn model
-    model = PhysicsInformedNN(X_u_star, X_f_star, layers, X_star_min, X_star_max, AdamIt, LBGFSIt)
+    model = PhysicsInformedNN(X_u_star, X_f_star, layers, X_star_min, X_star_max, AdamIt, LBFGSIt)
     model.init_optimizers()  # Initialize optimizers
     
     
@@ -313,11 +313,11 @@ if __name__ == "__main__":
 
     ###### Testing
 
-    funwave_dir = f"../funwave2d_outputs"
+    funwave_dir = '../funwave2d_outputs'
 
     x_test = np.arange(0, 501, 2).astype(np.float64)
     y_test = np.arange(0, 1001, 2).astype(np.float64)
-    X_test, Y_test = np.meshgrid(x, y)
+    X_test, Y_test = np.meshgrid(x_test, y_test)
     # Flatten the X and Y arrays
     X_test_flat = X_test.flatten().reshape(-1, 1)
     Y_test_flat = Y_test.flatten().reshape(-1, 1)
@@ -326,12 +326,13 @@ if __name__ == "__main__":
     h_test = np.loadtxt(funwave_dir + '/dep.out')
     h_test_flat = h_test.flatten().reshape(-1, 1)
 
-    for t in range(200,401):
+    for t in range(200,251):
 
-        T_test_flat = np.full((X_test.shape[0], 1), t, dtype=np.float64)
+        T_test = np.full((501, 251), t, dtype=np.float64)
+        T_test_flat = T_test.flatten().reshape(-1, 1)
 
         file_suffix = str(t).zfill(5)  # Pad the number with zeros to make it 5 digits
-        Z_test = np.loadtxt(funwave_dir + '/eta_{file_suffix}')  # Construct the file name
+        Z_test = np.loadtxt(funwave_dir + f'/eta_{file_suffix}')  # Construct the file name
         Z_test_flat = Z_test.flatten().reshape(-1, 1)
         
         U_test = np.loadtxt(funwave_dir + f'/u_{file_suffix}')
@@ -359,12 +360,17 @@ if __name__ == "__main__":
         
         # Plotting
         fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+        x_limits = [150, 500]
+        y_limits = [0, 1000]
 
         # X, Y, Z plot
         cmap1 = axs[0].pcolor(X_test, Y_test, z_pred_reshaped, shading='auto')
-        fig.colorbar(cmap1, ax=axs[0])
-        plt.xlabel('X (m)', fontsize=14)
-        plt.ylabel('Y (m)', fontsize=14)
+        cbar1 = fig.colorbar(cmap1, ax=axs[0])
+        cbar1.set_label('eta (m)')
+        axs[0].set_xlabel('X (m)')
+        axs[0].set_ylabel('Y (m)', fontsize=14)
+        axs[0].set_xlim(x_limits)
+        axs[0].set_ylim(y_limits)
 
 
         # X, Y, UV plot with quivers
@@ -381,14 +387,17 @@ if __name__ == "__main__":
         axs[1].quiver(X_sampled, Y_sampled, U_test_sampled, V_test_sampled, color='black', scale=scale)
         axs[1].quiver(X_sampled, Y_sampled, U_pred_sampled, V_pred_sampled, color='red', scale=scale)
         axs[1].set_xlabel('X (m)', fontsize=14)
-        axs[1].set_ylabel('Y (m)', fontsize=14)
+        axs[1].set_xlim(x_limits)
+        axs[1].set_ylim(y_limits)
 
 
         # X, Y, h plot
         cmap3 = axs[2].pcolor(X_test, Y_test, h_pred_reshaped, shading='auto')
-        fig.colorbar(cmap3, ax=axs[2])
-        plt.xlabel('X (m)', fontsize=14)
-        plt.ylabel('Y (m)', fontsize=14)
+        cbar3 = fig.colorbar(cmap3, ax=axs[2])
+        cbar3.set_label('bathymetry (m)')
+        axs[2].set_xlabel('X (m)', fontsize=14)
+        axs[2].set_xlim(x_limits)
+        axs[2].set_ylim(y_limits)
         
         # Save the plot with file number in the filename
         plt.savefig(f'../plots/predictions_{file_suffix}.png')
@@ -396,6 +405,9 @@ if __name__ == "__main__":
         plt.tight_layout()
         plt.show()
         plt.close()  # Close the plot to free up memory
+        
+        # Print the current value of t
+        print(f'Figure for t = {t} is plotted')
         
         # Concatenate the predictions for saving
         # predictions = np.hstack([h_pred, z_pred, u_pred, v_pred])
