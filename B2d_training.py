@@ -173,30 +173,9 @@ class PhysicsInformedNN():
         hv = h_pred * v_pred
         hu_x = self.compute_gradient(hu, self.x_f)
         hv_y = self.compute_gradient(hv, self.y_f)
-        A = hu_x + hv_y
-        B = u_x + v_y
-        A_x = self.compute_gradient(A, self.x_f)
-        A_y = self.compute_gradient(A, self.y_f)
-        B_x = self.compute_gradient(B, self.x_f)
-        B_y = self.compute_gradient(B, self.y_f)
-
-        z_alpha = -0.53 * h_pred + 0.47 * z_pred
-
-        # calculate u and v at the water surface elevation
-        temp1 = (z_alpha**2/2-1/6*(h_pred**2-h_pred*z_pred+z_pred**2))
-        temp2 = (z_alpha+1/2*(h_pred-z_pred))
-        u_2 = temp1*B_x + temp2*A_x
-        v_2 = temp1*B_y + temp2*A_y
-        u_surface = u_pred + u_2
-        v_surface = v_pred + v_2
-        H = h_pred + z_pred
-        Hu_surface = H*u_surface
-        Hv_surface = H*v_surface
-        Hu_x = self.compute_gradient(Hu_surface, self.x_f)
-        Hv_y = self.compute_gradient(Hv_surface, self.y_f)
 
         # loss with physics (Navier Stokes / Boussinesq etc)
-        f_cont = z_t + Hu_x + Hv_y # continuity eq.
+        f_cont = z_t + hu_x + hv_y # continuity eq.
         f_momx = u_t + u_pred * u_x + v_pred * u_y + 9.81 * z_x   # momentum in X dir
         f_momy = v_t + u_pred * v_x + v_pred * v_y + 9.81 * z_y   # momentum in Y dir
         
@@ -384,13 +363,13 @@ if __name__ == "__main__":
        
     # Define training points + iterations for Adam and LBFGS
     Ntrain = 10000
-    AdamIt = 10000
+    AdamIt = 1000
     LBFGSIt = 50000
     
     # Define input, hidden, and output layers
     input_features = 4 # t, x, y, eta
-    hidden_layers = 5
-    hidden_width = 8
+    hidden_layers = 10
+    hidden_width = 10
     output_features = 4 # h, eta, u, v
     layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
     
