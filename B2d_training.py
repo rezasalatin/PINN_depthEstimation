@@ -301,7 +301,6 @@ class PhysicsInformedNN():
         
         # Physics 
         output_f_pred = self.net_u(self.t_f, self.x_f, self.y_f, self.z_f)
-
         loss_f = self.physics_simple(output_f_pred)
         
         weight_loss_u = 1.0
@@ -368,8 +367,8 @@ if __name__ == "__main__":
     
     # Define input, hidden, and output layers
     input_features = 4 # t, x, y, eta
-    hidden_layers = 10
-    hidden_width = 10
+    hidden_layers = 20
+    hidden_width = 20
     output_features = 4 # h, eta, u, v
     layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
     
