@@ -146,6 +146,147 @@ class PhysicsInformedNN():
         output = self.dnn(torch.cat([t, x, y, z], dim=1))
         return output
     
+
+    def physics_simple(self, output_f_pred):
+
+        h_pred = output_f_pred[:, 0:1].to(device)
+        z_pred = output_f_pred[:, 1:2].to(device)
+        u_pred = output_f_pred[:, 2:3].to(device)
+        v_pred = output_f_pred[:, 3:4].to(device)
+
+        # This u is not correct. It is at a specific depth. For equations, calculate the u at the surface.
+
+        u_t = self.compute_gradient(u_pred, self.t_f)
+        u_x = self.compute_gradient(u_pred, self.x_f)
+        u_y = self.compute_gradient(u_pred, self.y_f)
+
+        v_t = self.compute_gradient(v_pred, self.t_f)
+        v_x = self.compute_gradient(v_pred, self.x_f)
+        v_y = self.compute_gradient(v_pred, self.y_f)
+
+        z_t = self.compute_gradient(z_pred, self.t_f)
+        z_x = self.compute_gradient(z_pred, self.x_f)
+        z_y = self.compute_gradient(z_pred, self.y_f)
+
+        # Higher orders (refer to Shi et al. 2012, Ocean Modeling)
+        hu = h_pred * u_pred
+        hv = h_pred * v_pred
+        hu_x = self.compute_gradient(hu, self.x_f)
+        hv_y = self.compute_gradient(hv, self.y_f)
+        A = hu_x + hv_y
+        B = u_x + v_y
+        A_x = self.compute_gradient(A, self.x_f)
+        A_y = self.compute_gradient(A, self.y_f)
+        B_x = self.compute_gradient(B, self.x_f)
+        B_y = self.compute_gradient(B, self.y_f)
+
+        z_alpha = -0.53 * h_pred + 0.47 * z_pred
+
+        # calculate u and v at the water surface elevation
+        temp1 = (z_alpha**2/2-1/6*(h_pred**2-h_pred*z_pred+z_pred**2))
+        temp2 = (z_alpha+1/2*(h_pred-z_pred))
+        u_2 = temp1*B_x + temp2*A_x
+        v_2 = temp1*B_y + temp2*A_y
+        u_surface = u_pred + u_2
+        v_surface = v_pred + v_2
+        H = h_pred + z_pred
+        Hu_surface = H*u_surface
+        Hv_surface = H*v_surface
+        Hu_x = self.compute_gradient(Hu_surface, self.x_f)
+        Hv_y = self.compute_gradient(Hv_surface, self.y_f)
+
+        # loss with physics (Navier Stokes / Boussinesq etc)
+        f_cont = z_t + Hu_x + Hv_y # continuity eq.
+        f_momx = u_t + u_pred * u_x + v_pred * u_y + 9.81 * z_x   # momentum in X dir
+        f_momy = v_t + u_pred * v_x + v_pred * v_y + 9.81 * z_y   # momentum in Y dir
+        
+        loss_f = torch.mean(f_cont**2) + torch.mean(f_momx**2) + torch.mean(f_momy**2)
+
+        return loss_f
+    
+    def physics(self, output_f_pred):
+
+        h_pred = output_f_pred[:, 0:1].to(device)
+        z_pred = output_f_pred[:, 1:2].to(device)
+        u_pred = output_f_pred[:, 2:3].to(device)
+        v_pred = output_f_pred[:, 3:4].to(device)
+
+        # This u is not correct. It is at a specific depth. For equations, calculate the u at the surface.
+
+        u_t = self.compute_gradient(u_pred, self.t_f)
+        u_x = self.compute_gradient(u_pred, self.x_f)
+        u_y = self.compute_gradient(u_pred, self.y_f)
+
+        v_t = self.compute_gradient(v_pred, self.t_f)
+        v_x = self.compute_gradient(v_pred, self.x_f)
+        v_y = self.compute_gradient(v_pred, self.y_f)
+
+        z_t = self.compute_gradient(z_pred, self.t_f)
+        z_x = self.compute_gradient(z_pred, self.x_f)
+        z_y = self.compute_gradient(z_pred, self.y_f)
+
+        # Higher orders (refer to Shi et al. 2012, Ocean Modeling)
+        hu = h_pred * u_pred
+        hv = h_pred * v_pred
+        hu_x = self.compute_gradient(hu, self.x_f)
+        hv_y = self.compute_gradient(hv, self.y_f)
+        A = hu_x + hv_y
+        B = u_x + v_y
+        A_t = self.compute_gradient(A, self.t_f)
+        A_x = self.compute_gradient(A, self.x_f)
+        A_y = self.compute_gradient(A, self.y_f)
+        B_t = self.compute_gradient(B, self.t_f)
+        B_x = self.compute_gradient(B, self.x_f)
+        B_y = self.compute_gradient(B, self.y_f)
+
+        z_alpha = -0.53 * h_pred + 0.47 * z_pred
+        z_alpha_x = self.compute_gradient(z_alpha, self.x_f)
+        z_alpha_y = self.compute_gradient(z_alpha, self.y_f)
+
+        # calculate u and v at the water surface elevation
+        temp1 = (z_alpha**2/2-1/6*(h_pred**2-h_pred*z_pred+z_pred**2))
+        temp2 = (z_alpha+1/2*(h_pred-z_pred))
+        u_2 = temp1*B_x + temp2*A_x
+        v_2 = temp1*B_y + temp2*A_y
+        u_surface = u_pred + u_2
+        v_surface = v_pred + v_2
+        H = h_pred + z_pred
+        Hu_surface = H*u_surface
+        Hv_surface = H*v_surface
+        Hu_x = self.compute_gradient(Hu_surface, self.x_f)
+        Hv_y = self.compute_gradient(Hv_surface, self.y_f)
+
+        # V1, dispersive Boussinesq terms
+        V1Ax = z_alpha**2/2*B_x + z_alpha*A_x
+        V1Ax_t = self.compute_gradient(V1Ax, self.t_f)
+        V1Ay = z_alpha**2/2*B_y + z_alpha*A_y
+        V1Ay_t = self.compute_gradient(V1Ay, self.t_f)
+        V1B = z_pred**2/2*B_t+z_pred*A_t
+        V1Bx = self.compute_gradient(V1B, self.x_f)
+        V1By = self.compute_gradient(V1B, self.y_f)
+        V1x = V1Ax_t - V1Bx
+        V1y = V1Ay_t - V1By
+        # V2, dispersive Boussinesq terms
+        V2 = (z_alpha-z_pred)*(u_pred*A_x+v_pred*A_y) \
+            +1/2*(z_alpha**2-z_pred**2)*(u_pred*B_x+v_pred*B_y)+1/2*(A+z_pred*B)**2
+        V2x = self.compute_gradient(V2, self.x_f)
+        V2y = self.compute_gradient(V2, self.y_f)
+        # V3
+        omega0 = v_x - u_y
+        omega2 = z_alpha_x * (A_y + z_alpha * B_y) - z_alpha_y * (A_x + z_alpha * B_x)
+        V3x = -omega0*v_2 - omega2*v_pred
+        V3y = omega0*u_2 + omega2*u_pred
+
+        # loss with physics (Navier Stokes / Boussinesq etc)
+        f_cont = z_t + Hu_x + Hv_y # continuity eq.
+        f_momx = u_t + u_pred * u_x + v_pred * u_y + 9.81 * z_x + V1x + V2x + V3x   # momentum in X dir
+        f_momy = v_t + u_pred * v_x + v_pred * v_y + 9.81 * z_y + V1y + V2y + V3y   # momentum in Y dir
+        
+        loss_f = torch.mean(f_cont**2) + torch.mean(f_momx**2) + torch.mean(f_momy**2)
+
+        return loss_f
+
+    
     # compute gradients for the pinn
     def compute_gradient(self, pred, var):
         
@@ -182,29 +323,7 @@ class PhysicsInformedNN():
         # Physics 
         output_f_pred = self.net_u(self.t_f, self.x_f, self.y_f, self.z_f)
 
-        h_pred = output_f_pred[:, 0:1].to(device)
-        z_pred = output_f_pred[:, 1:2].to(device)
-        u_pred = output_f_pred[:, 2:3].to(device)
-        v_pred = output_f_pred[:, 3:4].to(device)
-            
-        u_t = self.compute_gradient(u_pred, self.t_f)
-        u_x = self.compute_gradient(u_pred, self.x_f)
-        u_y = self.compute_gradient(u_pred, self.y_f)
-
-        v_t = self.compute_gradient(v_pred, self.t_f)
-        v_x = self.compute_gradient(v_pred, self.x_f)
-        v_y = self.compute_gradient(v_pred, self.y_f)
-
-        z_t = self.compute_gradient(z_pred, self.t_f)
-        z_x = self.compute_gradient(z_pred, self.x_f)
-        z_y = self.compute_gradient(z_pred, self.y_f)
-
-        # loss with physics (Navier Stokes / Boussinesq etc)
-        f_1 = u_t + (u_pred * u_x + v_pred * u_y) + 9.81 * (z_x + z_y)
-        f_2 = v_t + (u_pred * v_x + v_pred * v_y) + 9.81 * (z_x + z_y)
-        f_3 = z_t + (u_pred * z_x + v_pred * z_y) + (h_pred + z_pred) * (u_x + v_y)
-        
-        loss_f = torch.mean(f_1**2) + torch.mean(f_2**2) + torch.mean(f_3**2)
+        loss_f = self.physics_simple(output_f_pred)
         
         weight_loss_u = 1.0
         weight_loss_f = 1.0
@@ -358,22 +477,31 @@ if __name__ == "__main__":
         u_pred_reshaped = u_pred.reshape(X_test.shape)
         v_pred_reshaped = v_pred.reshape(X_test.shape)
         
-        # Plotting
-        fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+        # for all figures
+        fsize = 14
         x_limits = [150, 500]
         y_limits = [0, 1000]
 
+        ########## Fig 1
+        # Plotting figure 1 for eta
+        fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
         # X, Y, Z plot
-        cmap1 = axs[0].pcolor(X_test, Y_test, z_pred_reshaped, shading='auto')
-        cbar1 = fig.colorbar(cmap1, ax=axs[0])
-        cbar1.set_label('eta (m)')
-        axs[0].set_xlabel('X (m)')
-        axs[0].set_ylabel('Y (m)', fontsize=14)
-        axs[0].set_xlim(x_limits)
-        axs[0].set_ylim(y_limits)
+        cmap1 = ax.pcolor(X_test, Y_test, Z_test, shading='auto')
+        cbar1 = fig.colorbar(cmap1, ax=ax)
+        cbar1.set_label('eta_{real} (m)')
+        ax.set_xlabel('X (m)', fontsize=fsize)
+        ax.set_ylabel('Y (m)', fontsize=fsize)
+        ax.set_xlim(x_limits)
+        ax.set_ylim(y_limits)
+        # Save the plot with file number in the filename
+        plt.savefig(f'../plots/Eta_true_{file_suffix}.png')
+        plt.tight_layout()
+        plt.show()
+        plt.close()
 
-
-        # X, Y, UV plot with quivers
+        ########## Fig 2
+        # Plotting figure 1 for UV
+        fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
         n = 10  # Interval: Sample every nth point (e.g., n=10 for every 10th grid point)
         scale = 25  # Arrow size: Adjust as needed for visibility
         # Sampling the grid and vector field
@@ -384,30 +512,37 @@ if __name__ == "__main__":
         U_test_sampled = U_test[::n, ::n]
         V_test_sampled = V_test[::n, ::n]
         # X, Y, UV plot with quivers and controlled intervals and arrow size
-        axs[1].quiver(X_sampled, Y_sampled, U_test_sampled, V_test_sampled, color='black', scale=scale)
-        axs[1].quiver(X_sampled, Y_sampled, U_pred_sampled, V_pred_sampled, color='red', scale=scale)
-        axs[1].set_xlabel('X (m)', fontsize=14)
-        axs[1].set_xlim(x_limits)
-        axs[1].set_ylim(y_limits)
-
-
-        # X, Y, h plot
-        cmap3 = axs[2].pcolor(X_test, Y_test, h_pred_reshaped, shading='auto')
-        cbar3 = fig.colorbar(cmap3, ax=axs[2])
-        cbar3.set_label('bathymetry (m)')
-        axs[2].set_xlabel('X (m)', fontsize=14)
-        axs[2].set_xlim(x_limits)
-        axs[2].set_ylim(y_limits)
-        
+        ax.quiver(X_sampled, Y_sampled, U_test_sampled, V_test_sampled, color='black', scale=scale)
+        ax.quiver(X_sampled, Y_sampled, U_pred_sampled, V_pred_sampled, color='red', scale=scale)
+        ax.set_xlabel('X (m)', fontsize=fsize)
+        ax.set_ylabel('Y (m)', fontsize=fsize)
+        ax.set_xlim(x_limits)
+        ax.set_ylim(y_limits)
         # Save the plot with file number in the filename
-        plt.savefig(f'../plots/predictions_{file_suffix}.png')
-
+        plt.savefig(f'../plots/UV_pred_{file_suffix}.png')
         plt.tight_layout()
         plt.show()
-        plt.close()  # Close the plot to free up memory
+        plt.close()
+
+        ########## Fig 3
+        # Plotting figure 3 for eta
+        fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
+        # X, Y, Z plot
+        cmap1 = ax.pcolor(X_test, Y_test, h_pred_reshaped, shading='auto')
+        cbar1 = fig.colorbar(cmap1, ax=ax)
+        cbar1.set_label('bathymetry (m)')
+        ax.set_xlabel('X (m)', fontsize=fsize)
+        ax.set_ylabel('Y (m)', fontsize=fsize)
+        ax.set_xlim(x_limits)
+        ax.set_ylim(y_limits)
+        # Save the plot with file number in the filename
+        plt.savefig(f'../plots/h_pred_{file_suffix}.png')
+        plt.tight_layout()
+        plt.show()
+        plt.close()
         
         # Print the current value of t
-        print(f'Figure for t = {t} is plotted')
+        print(f'Figures for t = {t} are plotted!')
         
         # Concatenate the predictions for saving
         # predictions = np.hstack([h_pred, z_pred, u_pred, v_pred])
