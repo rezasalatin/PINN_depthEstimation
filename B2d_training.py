@@ -93,7 +93,7 @@ class PhysicsInformedNN():
         self.t_f = torch.tensor(X_f[:, 0:1], requires_grad=True).float().to(device)
         self.x_f = torch.tensor(X_f[:, 1:2], requires_grad=True).float().to(device)
         self.y_f = torch.tensor(X_f[:, 2:3], requires_grad=True).float().to(device)                
-        self.z_f = torch.tensor(X_f[:, 4:5]).float().to(device)
+        self.z_f = torch.tensor(X_f[:, 3:4]).float().to(device)
         
         self.layers = layers
 
@@ -361,7 +361,7 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
        
     # Define training points + iterations for Adam and LBFGS
-    Ntrain = 10000
+    Ntrain = 9600
     AdamIt = 1000
     LBFGSIt = 50000
     
@@ -372,8 +372,16 @@ if __name__ == "__main__":
     output_features = 4 # h, eta, u, v
     layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
     
+    funwave_dir = '../data/output_irr_pinn'
+    x_grid = 251
+    y_grid = 501
+    dx = 2
+    dy = 2
+    
+    training_data_dir = '../data/beach2d_irr.csv'
+    
     # Extract all data from csv file.
-    data = np.genfromtxt('../pinn_data/beach_2d_dt01.csv', delimiter=' ').astype(np.float32) # load data
+    data = np.genfromtxt(training_data_dir, delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
     x_all = data[:, 1:2].astype(np.float64)
     y_all = data[:, 2:3].astype(np.float64)
@@ -390,10 +398,37 @@ if __name__ == "__main__":
     # select training points randomly from the domain.
     idx = np.random.choice(X_star.shape[0], Ntrain, replace=False)
     X_u_star = X_star[idx,:]
-
-    # select all available points (gauges) for residuals
-    X_f_star = X_star
     
+    # select all available points (gauges) for residuals
+    dx_interval = dx*20
+    dy_interval = dy*20
+    X_f_star = np.empty((0, 4))  # Assuming you have 4 columns: T, X, Y, Z
+    x_f = np.arange(0, (x_grid-1)*dx + 1, dx).astype(np.float64)
+    y_f = np.arange(0, (y_grid-1)*dy + 1, dy).astype(np.float64)
+    X_f, Y_f = np.meshgrid(x_f, y_f)
+    X_f = X_f[::dx_interval, ::dy_interval]
+    Y_f = Y_f[::dx_interval, ::dy_interval]
+    # Flatten the X and Y arrays
+    X_f_flat = X_f.flatten().reshape(-1, 1)
+    Y_f_flat = Y_f.flatten().reshape(-1, 1)
+    
+    for t in [250, 302, 367, 299]:
+        
+        file_suffix = str(t).zfill(5)  # Pad the number with zeros to make it 5 digits
+        
+        T_f = np.full((x_grid, y_grid), t, dtype=np.float64)
+        T_f = T_f[::dx_interval, ::dy_interval]
+        T_f_flat = T_f.flatten().reshape(-1, 1)
+        
+        Z_f = np.loadtxt(funwave_dir + f'/eta_{file_suffix}')
+        Z_f = Z_f[::dx_interval, ::dy_interval]
+        Z_f_flat = Z_f.flatten().reshape(-1, 1)
+
+        # Create new data for this iteration
+        new_data = np.hstack((T_f_flat, X_f_flat, Y_f_flat, Z_f_flat))
+        # Append new data to X_f_star
+        X_f_star = np.vstack((X_f_star, new_data))
+
     # set up the pinn model
     model = PhysicsInformedNN(X_u_star, X_f_star, layers, X_star_min, X_star_max, AdamIt, LBFGSIt)
     model.init_optimizers()  # Initialize optimizers
@@ -410,10 +445,18 @@ if __name__ == "__main__":
 
     ###### Testing
 
-    funwave_dir = '../funwave2d_outputs'
+    current_avg = 60 # seconds or 5Tp
+    window_size = 60
+    t_final = 4879
 
-    x_test = np.arange(0, 501, 2).astype(np.float64)
-    y_test = np.arange(0, 1001, 2).astype(np.float64)
+    # initiate for current calculations
+    U_all_pred = np.zeros((x_grid*y_grid, window_size))
+    V_all_pred = U_all_pred
+    U_all_test = U_all_pred
+    V_all_test = U_all_pred
+
+    x_test = np.arange(0, (x_grid-1)*dx + 1, dx).astype(np.float64)
+    y_test = np.arange(0, (y_grid-1)*dy + 1, dy).astype(np.float64)
     X_test, Y_test = np.meshgrid(x_test, y_test)
     # Flatten the X and Y arrays
     X_test_flat = X_test.flatten().reshape(-1, 1)
@@ -423,9 +466,9 @@ if __name__ == "__main__":
     h_test = np.loadtxt(funwave_dir + '/dep.out')
     h_test_flat = h_test.flatten().reshape(-1, 1)
 
-    for t in range(200,251):
+    for t in range(0,t_final+1):
 
-        T_test = np.full((501, 251), t, dtype=np.float64)
+        T_test = np.full((x_grid, y_grid), t, dtype=np.float64)
         T_test_flat = T_test.flatten().reshape(-1, 1)
 
         file_suffix = str(t).zfill(5)  # Pad the number with zeros to make it 5 digits
@@ -437,7 +480,7 @@ if __name__ == "__main__":
 
         V_test = np.loadtxt(funwave_dir + f'/v_{file_suffix}')
         V_test_flat = V_test.flatten().reshape(-1, 1)
-        
+
         # make inputs ready for NN
         X_star = np.hstack((T_test_flat, X_test_flat, Y_test_flat, Z_test_flat))
 
@@ -447,80 +490,127 @@ if __name__ == "__main__":
         h_pred = h_pred.detach().cpu().numpy()
         z_pred = z_pred.detach().cpu().numpy()
         u_pred = u_pred.detach().cpu().numpy()
-        v_pred = v_pred.detach().cpu().numpy()
+        v_pred = v_pred.detach().cpu().numpy()        
 
         # Reshape predictions to match original grid shape
         h_pred_reshaped = h_pred.reshape(X_test.shape)
         z_pred_reshaped = z_pred.reshape(X_test.shape)
         u_pred_reshaped = u_pred.reshape(X_test.shape)
         v_pred_reshaped = v_pred.reshape(X_test.shape)
+
+        # Moving average for current calculations
+        U_all_pred[:, 0] = u_pred.flatten()
+        V_all_pred[:, 0] = v_pred.flatten()
+        U_all_test[:, 0] = U_test_flat.flatten()
+        V_all_test[:, 0] = V_test_flat.flatten()
+        U_avg_pred = np.mean(U_all_pred, axis=1)
+        V_avg_pred = np.mean(V_all_pred, axis=1)
+        U_avg_test = np.mean(U_all_test, axis=1)
+        V_avg_test = np.mean(V_all_test, axis=1)
+        U_avg_pred = U_avg_pred.reshape(X_test.shape)
+        V_avg_pred = V_avg_pred.reshape(X_test.shape)
+        U_avg_test = U_avg_test.reshape(X_test.shape)
+        V_avg_test = V_avg_test.reshape(X_test.shape)
+        # Roll the matrices to the right by one column
+        U_all_pred = np.roll(U_all_pred, shift=1, axis=1)
+        V_all_pred = np.roll(V_all_pred, shift=1, axis=1)
+        U_all_test = np.roll(U_all_test, shift=1, axis=1)
+        V_all_test = np.roll(V_all_test, shift=1, axis=1)
+        
         
         # for all figures
         fsize = 14
         x_limits = [150, 500]
         y_limits = [0, 1000]
 
-        ########## Fig 1
-        # Plotting figure 1 for eta
-        fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
-        # X, Y, Z plot
-        cmap1 = ax.pcolor(X_test, Y_test, Z_test, shading='auto')
-        cbar1 = fig.colorbar(cmap1, ax=ax)
-        cbar1.set_label('eta_{real} (m)')
-        ax.set_xlabel('X (m)', fontsize=fsize)
-        ax.set_ylabel('Y (m)', fontsize=fsize)
-        ax.set_xlim(x_limits)
-        ax.set_ylim(y_limits)
-        # Save the plot with file number in the filename
-        plt.savefig(f'../plots/Eta_true_{file_suffix}.png')
-        plt.tight_layout()
-        plt.show()
-        plt.close()
+        if t % 56 == 0:
 
-        ########## Fig 2
-        # Plotting figure 1 for UV
-        fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
-        n = 10  # Interval: Sample every nth point (e.g., n=10 for every 10th grid point)
-        scale = 25  # Arrow size: Adjust as needed for visibility
-        # Sampling the grid and vector field
-        X_sampled = X_test[::n, ::n]
-        Y_sampled = Y_test[::n, ::n]
-        U_pred_sampled = u_pred_reshaped[::n, ::n]
-        V_pred_sampled = v_pred_reshaped[::n, ::n]
-        U_test_sampled = U_test[::n, ::n]
-        V_test_sampled = V_test[::n, ::n]
-        # X, Y, UV plot with quivers and controlled intervals and arrow size
-        ax.quiver(X_sampled, Y_sampled, U_test_sampled, V_test_sampled, color='black', scale=scale)
-        ax.quiver(X_sampled, Y_sampled, U_pred_sampled, V_pred_sampled, color='red', scale=scale)
-        ax.set_xlabel('X (m)', fontsize=fsize)
-        ax.set_ylabel('Y (m)', fontsize=fsize)
-        ax.set_xlim(x_limits)
-        ax.set_ylim(y_limits)
-        # Save the plot with file number in the filename
-        plt.savefig(f'../plots/UV_pred_{file_suffix}.png')
-        plt.tight_layout()
-        plt.show()
-        plt.close()
+            ########## Fig 1
+            # Plotting figure 1 for eta
+            fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
+            # X, Y, Z plot
+            cmap1 = ax.pcolor(X_test, Y_test, Z_test, shading='auto')
+            cbar1 = fig.colorbar(cmap1, ax=ax)
+            cbar1.set_label('eta_{real} (m)')
+            ax.set_xlabel('X (m)', fontsize=fsize)
+            ax.set_ylabel('Y (m)', fontsize=fsize)
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
+            # Save the plot with file number in the filename
+            plt.savefig(f'../plots/plots/Eta_true_{file_suffix}.png', dpi=300)
+            plt.tight_layout()
+            plt.show()
+            plt.close()
 
-        ########## Fig 3
-        # Plotting figure 3 for eta
-        fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
-        # X, Y, Z plot
-        cmap1 = ax.pcolor(X_test, Y_test, h_pred_reshaped, shading='auto')
-        cbar1 = fig.colorbar(cmap1, ax=ax)
-        cbar1.set_label('bathymetry (m)')
-        ax.set_xlabel('X (m)', fontsize=fsize)
-        ax.set_ylabel('Y (m)', fontsize=fsize)
-        ax.set_xlim(x_limits)
-        ax.set_ylim(y_limits)
-        # Save the plot with file number in the filename
-        plt.savefig(f'../plots/h_pred_{file_suffix}.png')
-        plt.tight_layout()
-        plt.show()
-        plt.close()
-        
-        # Print the current value of t
-        print(f'Figures for t = {t} are plotted!')
+            ########## Fig 2
+            # Plotting figure 1 for UV
+            fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
+            n = 10  # Interval: Sample every nth point (e.g., n=10 for every 10th grid point)
+            scale = 25  # Arrow size: Adjust as needed for visibility
+            # Sampling the grid and vector field
+            X_sampled = X_test[::n, ::n]
+            Y_sampled = Y_test[::n, ::n]
+            U_pred_sampled = u_pred_reshaped[::n, ::n]
+            V_pred_sampled = v_pred_reshaped[::n, ::n]
+            U_test_sampled = U_test[::n, ::n]
+            V_test_sampled = V_test[::n, ::n]
+            # X, Y, UV plot with quivers and controlled intervals and arrow size
+            ax.quiver(X_sampled, Y_sampled, U_test_sampled, V_test_sampled, color='black', scale=scale)
+            ax.quiver(X_sampled, Y_sampled, U_pred_sampled, V_pred_sampled, color='red', alpha=0.5, scale=scale)
+            ax.set_xlabel('X (m)', fontsize=fsize)
+            ax.set_ylabel('Y (m)', fontsize=fsize)
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
+            # Save the plot with file number in the filename
+            plt.savefig(f'../plots/UV_pred_{file_suffix}.png', dpi=300)
+            plt.tight_layout()
+            plt.show()
+            plt.close()
+
+            ########## Fig 3
+            # Plotting figure 3 for eta
+            fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
+            # X, Y, Z plot
+            cmap1 = ax.pcolor(X_test, Y_test, h_pred_reshaped, shading='auto')
+            cbar1 = fig.colorbar(cmap1, ax=ax)
+            cbar1.set_label('bathymetry (m)')
+            ax.set_xlabel('X (m)', fontsize=fsize)
+            ax.set_ylabel('Y (m)', fontsize=fsize)
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
+            # Save the plot with file number in the filename
+            plt.savefig(f'../plots/h_pred_{file_suffix}.png', dpi=300)
+            plt.tight_layout()
+            plt.show()
+            plt.close()
+
+            ########## Fig 4
+            # Plotting figure 1 for UV average
+            fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
+            n = 10  # Interval: Sample every nth point (e.g., n=10 for every 10th grid point)
+            scale = 25  # Arrow size: Adjust as needed for visibility
+            # Sampling the grid and vector field
+            X_sampled = X_test[::n, ::n]
+            Y_sampled = Y_test[::n, ::n]
+            U_pred_sampled = U_avg_pred[::n, ::n]
+            V_pred_sampled = V_avg_pred[::n, ::n]
+            U_test_sampled = U_avg_test[::n, ::n]
+            V_test_sampled = V_avg_test[::n, ::n]
+            # X, Y, UV plot with quivers and controlled intervals and arrow size
+            ax.quiver(X_sampled, Y_sampled, U_test_sampled, V_test_sampled, color='black', scale=scale)
+            ax.quiver(X_sampled, Y_sampled, U_pred_sampled, V_pred_sampled, color='red', alpha=0.5, scale=scale)
+            ax.set_xlabel('X (m)', fontsize=fsize)
+            ax.set_ylabel('Y (m)', fontsize=fsize)
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
+            # Save the plot with file number in the filename
+            plt.savefig(f'../plots/Current_pred_{file_suffix}.png', dpi=300)
+            plt.tight_layout()
+            plt.show()
+            plt.close()
+            
+            # Print the current value of t
+            print(f'Figures for t = {t} are plotted!')
         
         # Concatenate the predictions for saving
         # predictions = np.hstack([h_pred, z_pred, u_pred, v_pred])
