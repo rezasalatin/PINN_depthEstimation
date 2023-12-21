@@ -63,10 +63,7 @@ class DNN(torch.nn.Module):
         torch.nn.init.zeros_(last_linear_layer.bias)
 
         layer_list.append(('layer_%d' % (self.depth - 1), last_linear_layer))
-            
-        layer_list.append(
-            ('layer_%d' % (self.depth - 1), torch.nn.Linear(layers[-2], layers[-1]))
-        )
+
         layerDict = OrderedDict(layer_list)
         
         # deploy layers
@@ -113,7 +110,7 @@ class PhysicsInformedNN():
         # Adam optimizer
         self.optimizer_Adam = torch.optim.Adam(
             self.dnn.parameters(), 
-            lr=1e-5 # learning rate
+            lr=1e-4 # learning rate
         )
 
         # L-BFGS optimizer
@@ -142,7 +139,6 @@ class PhysicsInformedNN():
         x = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
         y = 2.0 * (y - self.vals_min[2])/(self.vals_max[2]-self.vals_min[2]) - 1.0
         z = 2.0 * (z - self.vals_min[4])/(self.vals_max[4]-self.vals_min[4]) - 1.0
-        
         output = self.dnn(torch.cat([t, x, y, z], dim=1))
         return output
     
@@ -304,7 +300,7 @@ class PhysicsInformedNN():
         loss_f = self.physics_simple(output_f_pred)
         
         weight_loss_u = 1.0
-        weight_loss_f = 1.0
+        weight_loss_f = 100.0
         
         loss = weight_loss_u * loss_u + weight_loss_f * loss_f
                 
@@ -313,11 +309,19 @@ class PhysicsInformedNN():
             print(
                 'Iter %d, Loss_u: %.5e, Loss_f: %.5e, Total Loss: %.5e' % 
                 (self.iter, loss_u.item(), loss_f.item(), loss.item()))
+        
+        # Write loss values to file every 100 iterations
+        # file.write(f'{self.iter},{loss_u.item()},{loss_f.item()},{loss.item()}\n')
+
 
         return loss
     
     def train(self):
         self.dnn.train()
+
+        # Open a file to write loss values
+        # with open(os.path.join(log_dir, 'loss_values.csv'), 'w') as file:
+         #   file.write('Iteration,Loss_u,Loss_f,Total_Loss\n')  # Write the header
 
         # First phase of training with Adam
         for i in range(self.AdamIt):  # number of iterations
@@ -358,7 +362,7 @@ class PhysicsInformedNN():
 if __name__ == "__main__": 
        
     # Define training points + iterations for Adam and LBFGS
-    Ntrain = 9600
+    Ntrain = 4800
     AdamIt = 1000
     LBFGSIt = 50000
     
@@ -397,8 +401,8 @@ if __name__ == "__main__":
     X_u_star = X_star[idx,:]
     
     # select all available points (gauges) for residuals
-    dx_interval = dx*20
-    dy_interval = dy*20
+    dx_interval = dx*10
+    dy_interval = dy*10
     X_f_star = np.empty((0, 4))  # Assuming you have 4 columns: T, X, Y, Z
     x_f = np.arange(0, (x_grid-1)*dx + 1, dx).astype(np.float64)
     y_f = np.arange(0, (y_grid-1)*dy + 1, dy).astype(np.float64)
@@ -444,7 +448,7 @@ if __name__ == "__main__":
 
     current_avg = 60 # seconds or 5Tp
     window_size = 60
-    t_final = 4879
+    t_final = 500
 
     # initiate for current calculations
     U_all_pred = np.zeros((x_grid*y_grid, window_size))
@@ -520,7 +524,7 @@ if __name__ == "__main__":
         x_limits = [150, 500]
         y_limits = [0, 1000]
 
-        if t % 56 == 0:
+        if t % 6 == 0:
 
             ########## Fig 1
             # Plotting figure 1 for eta
@@ -559,7 +563,7 @@ if __name__ == "__main__":
             ax.set_xlim(x_limits)
             ax.set_ylim(y_limits)
             # Save the plot with file number in the filename
-            plt.savefig(f'../plots/UV_pred_{file_suffix}.png', dpi=300)
+            plt.savefig(f'../plots/plots/UV_pred_{file_suffix}.png', dpi=300)
             plt.tight_layout()
             plt.show()
             plt.close()
@@ -576,7 +580,7 @@ if __name__ == "__main__":
             ax.set_xlim(x_limits)
             ax.set_ylim(y_limits)
             # Save the plot with file number in the filename
-            plt.savefig(f'../plots/h_pred_{file_suffix}.png', dpi=300)
+            plt.savefig(f'../plots/plots/h_pred_{file_suffix}.png', dpi=300)
             plt.tight_layout()
             plt.show()
             plt.close()
@@ -601,7 +605,7 @@ if __name__ == "__main__":
             ax.set_xlim(x_limits)
             ax.set_ylim(y_limits)
             # Save the plot with file number in the filename
-            plt.savefig(f'../plots/Current_pred_{file_suffix}.png', dpi=300)
+            plt.savefig(f'../plots/plots/Current_pred_{file_suffix}.png', dpi=300)
             plt.tight_layout()
             plt.show()
             plt.close()
