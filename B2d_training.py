@@ -313,9 +313,6 @@ class PhysicsInformedNN():
             print(
                 'Iter %d, Loss_u: %.5e, Loss_f: %.5e, Total Loss: %.5e' % 
                 (self.iter, loss_u.item(), loss_f.item(), loss.item()))
-            print(
-                'Loss_h: %.5e, Loss_z: %.5e, Loss_u: %.5e' % 
-                (loss_comp_h.item(), loss_comp_z.item(), loss_comp_u.item()))
 
         return loss
     
