@@ -1,0 +1,51 @@
+{
+    "Num_Training": 4800,
+    "Adam_MaxIt": 1000,
+    "LBFGS_MaxIt": 50000,
+    "layers": {
+        "input_features": 4,
+        "hidden_layers": 20,
+        "hidden_width": 20,
+        "output_features": 4
+    },
+    "optimizer": {
+        "adam_learning_rate": 1e-4,
+        "scheduler_step_size": 10000,
+        "scheduler_gamma": 0.8,
+        "lbfgs_learning_rate": 1,
+        "lbfgs_max_iteration": 5e4,
+        "lbfgs_max_evaluation": 6.25e4,
+        "lbfgs_history_size": 100,
+        "lbfgs_tolerance_grad": 1e-5, 
+        "lbfgs_tolerance_change": 1e-7,
+        "lbfgs_line_search_fn": "strong_wolfe"
+    },
+    "loss": {
+        "weight_h": 1,
+        "weight_z": 1000,
+        "weight_u": 1,
+        "weight_v": 1,
+        "weight_fidelity": 1,
+        "weight_residual": 1
+    },
+    "data": {
+        "data_fidelity_dir": "../data/beach2d_reg.csv",
+        "data_fidelity_in": ["t", "x", "y", "z"],
+        "data_fidelity_ou": ["h", "z", "u", "v"],
+        "data_residual_in": ["t", "x", "y", "z"],
+        "data_residual_ou": ["h", "z", "u", "v"]
+    },
+    "numerical_model": {
+        "dir": "../data/output_reg_pinn",
+        "nx": 251,
+        "ny": 501,
+        "dx": 2,
+        "dy": 2,
+        "numerical_model_snapshots": [250, 302, 367, 299]
+    },
+    "plot": {
+        "figure_size": 14,
+        "x_limits": [150, 450],
+        "y_limits": [0, 1000]
+    }
+}
