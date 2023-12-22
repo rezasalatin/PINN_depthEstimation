@@ -1,21 +1,23 @@
 """
-PINN training for Boussinesq 1d
+PINN training for Boussinesq 2d
 @author: Reza Salatin
 December 2023
 w/ Pytorch
 """
 
 import torch
+from torch import nn
 from collections import OrderedDict
 import numpy as np
 import time
 import matplotlib.pyplot as plt
 import datetime
 import os
+from physics_functions import Boussinesq_simple as physics
 
 np.random.seed(1234)
 
-# CUDA support 
+# CUDA support
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(1234)
     device = torch.device('cuda')
@@ -27,57 +29,50 @@ else:
 
 # Get current date and time
 now = datetime.datetime.now()
-folder_name = now.strftime("log_%Y%m%d_%H%M%S")
+folder_name = now.strftime("log_%Y%m%d_%H%M")
 # Create a directory with the folder_name
-log_dir = f"../pinn_log/{folder_name}"
+log_dir = f"../log/{folder_name}"
 os.makedirs(log_dir, exist_ok=True)
     
 # the deep neural network
-class DNN(torch.nn.Module):
+class DNN(nn.Module):
+
     def __init__(self, layers):
         super(DNN, self).__init__()
-        
-        # parameters
-        self.depth = len(layers) - 1
-        
-        # set up layer order dict
-        self.activation = torch.nn.Tanh
-        
-        layer_list = list()
-        for i in range(self.depth - 1): 
-            linear_layer = torch.nn.Linear(layers[i], layers[i+1])
+        self.layers = nn.Sequential(self._build_layers(layers))
 
-            # Xavier initialization
-            torch.nn.init.xavier_uniform_(linear_layer.weight)
-            # Set the biases to zero
-            torch.nn.init.zeros_(linear_layer.bias)
+    def _build_layers(self, layers):
+        layer_list = []
+        num_layers = len(layers)
 
-            layer_list.append(('layer_%d' % i, linear_layer))
-            layer_list.append(('activation_%d' % i, self.activation()))
+        for i in range(num_layers - 1):
+            linear_layer = nn.Linear(layers[i], layers[i + 1])
+            DNN._initialize_layer(linear_layer, zero_bias=(i < num_layers - 2))
 
-        # Apply Xavier initialization to the last layer as well
-        last_linear_layer = torch.nn.Linear(layers[-2], layers[-1])
-        torch.nn.init.xavier_uniform_(last_linear_layer.weight)
+            layer_list.append((f'layer_{i}', linear_layer))
+            if i < num_layers - 2:
+                layer_list.append((f'activation_{i}', nn.Tanh()))
 
-        # Initialize the biases of the last layer to zero
-        torch.nn.init.zeros_(last_linear_layer.bias)
+        return OrderedDict(layer_list)
 
-        layer_list.append(('layer_%d' % (self.depth - 1), last_linear_layer))
+    def _initialize_layer(layer, zero_bias=True):
+        """Initialize a layer with Xavier uniform weights and optional zeroed bias."""
+        nn.init.xavier_uniform_(layer.weight)
+        if zero_bias:
+            nn.init.zeros_(layer.bias)
 
-        layerDict = OrderedDict(layer_list)
-        
-        # deploy layers
-        self.layers = torch.nn.Sequential(layerDict)
-        
     def forward(self, x):
-        out = self.layers(x)
-        return out
+        """Forward pass of the network."""
+        return self.layers(x)
     
+
 # the physics-guided neural network
-class PhysicsInformedNN():
+class PINN():
+
+    # Initializer
     def __init__(self, X_u, X_f, layers, X_min, X_max, AdamIt, LBFGSIt):
         
-        # data
+        # temporal and spatial information for observations
         self.t_u = torch.tensor(X_u[:, 0:1]).float().to(device)
         self.x_u = torch.tensor(X_u[:, 1:2]).float().to(device)
         self.y_u = torch.tensor(X_u[:, 2:3]).float().to(device)
@@ -87,30 +82,42 @@ class PhysicsInformedNN():
         self.u_u = torch.tensor(X_u[:, 5:6]).float().to(device)
         self.v_u = torch.tensor(X_u[:, 6:7]).float().to(device)
         
+        # temporal and spatial information for physics
         self.t_f = torch.tensor(X_f[:, 0:1], requires_grad=True).float().to(device)
         self.x_f = torch.tensor(X_f[:, 1:2], requires_grad=True).float().to(device)
         self.y_f = torch.tensor(X_f[:, 2:3], requires_grad=True).float().to(device)                
         self.z_f = torch.tensor(X_f[:, 3:4]).float().to(device)
-        
-        self.layers = layers
 
+        # max and min values for normalization
         self.vals_min = torch.tensor(X_min).float().to(device)
         self.vals_max = torch.tensor(X_max).float().to(device)
         
-        # deep neural networks
+        # layers of NN
+        self.layers = layers
         self.dnn = DNN(layers).to(device)
-        # initialize iteration number
-        self.iter = 0
-        # Adam and LBFGS Iterations
+
+        # Adam and LBFGS max iterations
         self.AdamIt = AdamIt
         self.LBFGSIt = LBFGSIt
 
-    # Initialize two optimizers
+        # Initialize iteration counter
+        self.iter = 0
+        
+
+    # Initialize optimizers
     def init_optimizers(self):
+
         # Adam optimizer
         self.optimizer_Adam = torch.optim.Adam(
             self.dnn.parameters(), 
             lr=1e-4 # learning rate
+        )
+
+        # Define learning rate scheduler for Adam
+        self.scheduler_Adam = torch.optim.lr_scheduler.StepLR(
+            self.optimizer_Adam, 
+            step_size=10000, 
+            gamma=0.8
         )
 
         # L-BFGS optimizer
@@ -125,154 +132,21 @@ class PhysicsInformedNN():
             line_search_fn="strong_wolfe"
         )
 
-        # Define learning rate scheduler for Adam
-        self.scheduler_Adam = torch.optim.lr_scheduler.StepLR(
-            self.optimizer_Adam, 
-            step_size=10000, 
-            gamma=0.8
-        )
-        
-    def net_u(self, t, x, y, z):  
 
-        # input normalization [-1, 1]
+    # Normalize and feed inputs to NN to get predictions
+    def net_u(self, t, x, y, z):
+
+        # input normalization between [-1, 1]
         t = 2.0 * (t - self.vals_min[0])/(self.vals_max[0]-self.vals_min[0]) - 1.0
         x = 2.0 * (x - self.vals_min[1])/(self.vals_max[1]-self.vals_min[1]) - 1.0
         y = 2.0 * (y - self.vals_min[2])/(self.vals_max[2]-self.vals_min[2]) - 1.0
         z = 2.0 * (z - self.vals_min[4])/(self.vals_max[4]-self.vals_min[4]) - 1.0
         output = self.dnn(torch.cat([t, x, y, z], dim=1))
+
         return output
     
 
-    def physics_simple(self, output_f_pred):
-
-        h_pred = output_f_pred[:, 0:1].to(device)
-        z_pred = output_f_pred[:, 1:2].to(device)
-        u_pred = output_f_pred[:, 2:3].to(device)
-        v_pred = output_f_pred[:, 3:4].to(device)
-
-        # This u is not correct. It is at a specific depth. For equations, calculate the u at the surface.
-
-        u_t = self.compute_gradient(u_pred, self.t_f)
-        u_x = self.compute_gradient(u_pred, self.x_f)
-        u_y = self.compute_gradient(u_pred, self.y_f)
-
-        v_t = self.compute_gradient(v_pred, self.t_f)
-        v_x = self.compute_gradient(v_pred, self.x_f)
-        v_y = self.compute_gradient(v_pred, self.y_f)
-
-        z_t = self.compute_gradient(z_pred, self.t_f)
-        z_x = self.compute_gradient(z_pred, self.x_f)
-        z_y = self.compute_gradient(z_pred, self.y_f)
-
-        # Higher orders (refer to Shi et al. 2012, Ocean Modeling)
-        hu = h_pred * u_pred
-        hv = h_pred * v_pred
-        hu_x = self.compute_gradient(hu, self.x_f)
-        hv_y = self.compute_gradient(hv, self.y_f)
-
-        # loss with physics (Navier Stokes / Boussinesq etc)
-        f_cont = z_t + hu_x + hv_y # continuity eq.
-        f_momx = u_t + u_pred * u_x + v_pred * u_y + 9.81 * z_x   # momentum in X dir
-        f_momy = v_t + u_pred * v_x + v_pred * v_y + 9.81 * z_y   # momentum in Y dir
-        
-        loss_f = torch.mean(f_cont**2) + torch.mean(f_momx**2) + torch.mean(f_momy**2)
-
-        return loss_f
-    
-    def physics(self, output_f_pred):
-
-        h_pred = output_f_pred[:, 0:1].to(device)
-        z_pred = output_f_pred[:, 1:2].to(device)
-        u_pred = output_f_pred[:, 2:3].to(device)
-        v_pred = output_f_pred[:, 3:4].to(device)
-
-        # This u is not correct. It is at a specific depth. For equations, calculate the u at the surface.
-
-        u_t = self.compute_gradient(u_pred, self.t_f)
-        u_x = self.compute_gradient(u_pred, self.x_f)
-        u_y = self.compute_gradient(u_pred, self.y_f)
-
-        v_t = self.compute_gradient(v_pred, self.t_f)
-        v_x = self.compute_gradient(v_pred, self.x_f)
-        v_y = self.compute_gradient(v_pred, self.y_f)
-
-        z_t = self.compute_gradient(z_pred, self.t_f)
-        z_x = self.compute_gradient(z_pred, self.x_f)
-        z_y = self.compute_gradient(z_pred, self.y_f)
-
-        # Higher orders (refer to Shi et al. 2012, Ocean Modeling)
-        hu = h_pred * u_pred
-        hv = h_pred * v_pred
-        hu_x = self.compute_gradient(hu, self.x_f)
-        hv_y = self.compute_gradient(hv, self.y_f)
-        A = hu_x + hv_y
-        B = u_x + v_y
-        A_t = self.compute_gradient(A, self.t_f)
-        A_x = self.compute_gradient(A, self.x_f)
-        A_y = self.compute_gradient(A, self.y_f)
-        B_t = self.compute_gradient(B, self.t_f)
-        B_x = self.compute_gradient(B, self.x_f)
-        B_y = self.compute_gradient(B, self.y_f)
-
-        z_alpha = -0.53 * h_pred + 0.47 * z_pred
-        z_alpha_x = self.compute_gradient(z_alpha, self.x_f)
-        z_alpha_y = self.compute_gradient(z_alpha, self.y_f)
-
-        # calculate u and v at the water surface elevation
-        temp1 = (z_alpha**2/2-1/6*(h_pred**2-h_pred*z_pred+z_pred**2))
-        temp2 = (z_alpha+1/2*(h_pred-z_pred))
-        u_2 = temp1*B_x + temp2*A_x
-        v_2 = temp1*B_y + temp2*A_y
-        u_surface = u_pred + u_2
-        v_surface = v_pred + v_2
-        H = h_pred + z_pred
-        Hu_surface = H*u_surface
-        Hv_surface = H*v_surface
-        Hu_x = self.compute_gradient(Hu_surface, self.x_f)
-        Hv_y = self.compute_gradient(Hv_surface, self.y_f)
-
-        # V1, dispersive Boussinesq terms
-        V1Ax = z_alpha**2/2*B_x + z_alpha*A_x
-        V1Ax_t = self.compute_gradient(V1Ax, self.t_f)
-        V1Ay = z_alpha**2/2*B_y + z_alpha*A_y
-        V1Ay_t = self.compute_gradient(V1Ay, self.t_f)
-        V1B = z_pred**2/2*B_t+z_pred*A_t
-        V1Bx = self.compute_gradient(V1B, self.x_f)
-        V1By = self.compute_gradient(V1B, self.y_f)
-        V1x = V1Ax_t - V1Bx
-        V1y = V1Ay_t - V1By
-        # V2, dispersive Boussinesq terms
-        V2 = (z_alpha-z_pred)*(u_pred*A_x+v_pred*A_y) \
-            +1/2*(z_alpha**2-z_pred**2)*(u_pred*B_x+v_pred*B_y)+1/2*(A+z_pred*B)**2
-        V2x = self.compute_gradient(V2, self.x_f)
-        V2y = self.compute_gradient(V2, self.y_f)
-        # V3
-        omega0 = v_x - u_y
-        omega2 = z_alpha_x * (A_y + z_alpha * B_y) - z_alpha_y * (A_x + z_alpha * B_x)
-        V3x = -omega0*v_2 - omega2*v_pred
-        V3y = omega0*u_2 + omega2*u_pred
-
-        # loss with physics (Navier Stokes / Boussinesq etc)
-        f_cont = z_t + Hu_x + Hv_y # continuity eq.
-        f_momx = u_t + u_pred * u_x + v_pred * u_y + 9.81 * z_x + V1x + V2x + V3x   # momentum in X dir
-        f_momy = v_t + u_pred * v_x + v_pred * v_y + 9.81 * z_y + V1y + V2y + V3y   # momentum in Y dir
-        
-        loss_f = torch.mean(f_cont**2) + torch.mean(f_momx**2) + torch.mean(f_momy**2)
-
-        return loss_f
-
-    
-    # compute gradients for the pinn
-    def compute_gradient(self, pred, var):
-        
-        grad = torch.autograd.grad(
-            pred, var, 
-            grad_outputs=torch.ones_like(pred),
-            retain_graph=True,
-            create_graph=True
-        )[0]
-        return grad
-    
+    # Loss function
     def loss_func(self):
         
         output_u_pred = self.net_u(self.t_u, self.x_u, self.y_u, self.z_u)
@@ -282,69 +156,59 @@ class PhysicsInformedNN():
         u_pred = output_u_pred[:, 2:3].to(device)
         v_pred = output_u_pred[:, 3:4].to(device)
         
-        weight_h = 1.0
-        weight_z = 1.0
-        weight_u = 1.0
-        weight_v = 1.0
-
         loss_comp_h = torch.mean((self.h_u - h_pred)**2)
         loss_comp_z = torch.mean((self.z_u - z_pred)**2)
         loss_comp_u = torch.mean((self.u_u - u_pred)**2)
         loss_comp_v = torch.mean((self.v_u - v_pred)**2)
 
+        # Fidelity loss
+        weight_h, weight_z, weight_u, weight_v = 1.0, 1.0, 1.0, 1.0
         loss_u = weight_h * loss_comp_h + weight_z * loss_comp_z \
             + weight_u * loss_comp_u + weight_v * loss_comp_v
         
-        # Physics 
+        # Residual loss
         output_f_pred = self.net_u(self.t_f, self.x_f, self.y_f, self.z_f)
-        loss_f = self.physics_simple(output_f_pred)
+        loss_f = physics(output_f_pred, self.t_f, self.x_f, self.y_f, device)
         
-        weight_loss_u = 1.0
-        weight_loss_f = 100.0
-        
-        loss = weight_loss_u * loss_u + weight_loss_f * loss_f
+        # Total loss
+        weight_fidelity, weight_residuals = 1.0, 100.0
+        loss = weight_fidelity * loss_u + weight_residuals * loss_f
                 
+        # iteration (epoch) counter
         self.iter += 1
         if self.iter % 100 == 0:
             print(
                 'Iter %d, Loss_u: %.5e, Loss_f: %.5e, Total Loss: %.5e' % 
                 (self.iter, loss_u.item(), loss_f.item(), loss.item()))
-        
-        # Write loss values to file every 100 iterations
-        # file.write(f'{self.iter},{loss_u.item()},{loss_f.item()},{loss.item()}\n')
-
 
         return loss
+
     
+    # Model training with two optimizers
     def train(self):
+
         self.dnn.train()
 
-        # Open a file to write loss values
-        # with open(os.path.join(log_dir, 'loss_values.csv'), 'w') as file:
-         #   file.write('Iteration,Loss_u,Loss_f,Total_Loss\n')  # Write the header
-
-        # First phase of training with Adam
-        for i in range(self.AdamIt):  # number of iterations
-            self.optimizer_Adam.zero_grad()  # Zero gradients for Adam optimizer
+        # Training with Adam optimizer
+        for i in range(self.AdamIt):
+            self.optimizer_Adam.zero_grad()
             loss = self.loss_func()
             loss.backward()
             self.optimizer_Adam.step()
-            self.scheduler_Adam.step()  # Update the learning rate
+            self.scheduler_Adam.step()
 
-        # Second phase of training with LBFGS
+        # Training with L-BFGS optimizer
         def closure():
             self.optimizer_LBFGS.zero_grad()  # Zero gradients for LBFGS optimizer
             loss = self.loss_func()
             loss.backward()
             return loss
-        
         self.optimizer_LBFGS.step(closure)
 
-        # Print final loss after training
-        final_loss = self.loss_func()  # Get the final loss
-        print('Final Iter %d, Total Loss: %.5e' % (self.iter, final_loss.item()))
     
+    # Testing: Prediction
     def predict(self, X):
+
         t = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
         x = torch.tensor(X[:, 1:2], requires_grad=True).float().to(device)
         y = torch.tensor(X[:, 2:3], requires_grad=True).float().to(device)
@@ -357,14 +221,38 @@ class PhysicsInformedNN():
         u_pred = output_pred[:, 2:3].to(device)
         v_pred = output_pred[:, 3:4].to(device)
 
-        return h_pred, z_pred, u_pred, v_pred  # Return the computed predictions
+        return h_pred, z_pred, u_pred, v_pred
     
+
+    # Testing: On the fly residual loss calculator
+    def loss_func_otf(self, new_data):
+
+        new_t, new_x, new_y, new_h, new_z, new_u, new_v = [torch.tensor(new_data[:, i:i+1]).float().to(device) for i in range(3, 7)]  # Adjust indices based on new_data structure
+        output_f_pred = torch.cat([new_h, new_z, new_u, new_v], dim=1)
+        loss = physics(output_f_pred, new_t, new_x, new_y, device)
+
+        return loss
+    
+    # Testing: On the fly model update with L-BFGS
+    def update_model_otf(self, new_data):
+
+        def closure():
+            self.optimizer_LBFGS.zero_grad()
+            loss = self.loss_func_otf(new_data)
+            loss.backward()
+            return loss
+        
+        # Perform one optimization step
+        self.optimizer_LBFGS.step(closure)
+    
+
+# Main
 if __name__ == "__main__": 
        
     # Define training points + iterations for Adam and LBFGS
     Ntrain = 4800
-    AdamIt = 1000
-    LBFGSIt = 50000
+    AdamIt = 100
+    LBFGSIt = 500
     
     # Define input, hidden, and output layers
     input_features = 4 # t, x, y, eta
@@ -373,13 +261,13 @@ if __name__ == "__main__":
     output_features = 4 # h, eta, u, v
     layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
     
-    funwave_dir = '../data/output_irr_pinn'
+    funwave_dir = '../data/output_reg_pinn'
     x_grid = 251
     y_grid = 501
     dx = 2
     dy = 2
     
-    training_data_dir = '../data/beach2d_irr.csv'
+    training_data_dir = '../data/beach2d_reg.csv'
     
     # Extract all data from csv file.
     data = np.genfromtxt(training_data_dir, delimiter=' ').astype(np.float32) # load data
@@ -431,7 +319,7 @@ if __name__ == "__main__":
         X_f_star = np.vstack((X_f_star, new_data))
 
     # set up the pinn model
-    model = PhysicsInformedNN(X_u_star, X_f_star, layers, X_star_min, X_star_max, AdamIt, LBFGSIt)
+    model = PINN(X_u_star, X_f_star, layers, X_star_min, X_star_max, AdamIt, LBFGSIt)
     model.init_optimizers()  # Initialize optimizers
     
     
@@ -517,7 +405,12 @@ if __name__ == "__main__":
         V_all_pred = np.roll(V_all_pred, shift=1, axis=1)
         U_all_test = np.roll(U_all_test, shift=1, axis=1)
         V_all_test = np.roll(V_all_test, shift=1, axis=1)
-        
+
+        ########## Model update during testing
+        # Format the predictions to match the training data structure
+        new_data = np.hstack((T_test_flat, X_test_flat, Y_test_flat, h_pred, z_pred, u_pred, v_pred))
+        # Update the model using new predictions
+        model.update_model_otf(new_data)
         
         # for all figures
         fsize = 14
