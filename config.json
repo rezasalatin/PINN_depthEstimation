@@ -43,10 +43,10 @@
     "data_residual": {
         "dir": "../data/output_reg_pinn",
         "data_in": {
-            "t": "t",
-            "x": "x_mesh",
-            "y": "y_mesh",
-            "z": "eta"
+            "t": {"file": "t", "properties": ["differentiable"]},
+            "x": {"file": "x_mesh", "properties": ["differentiable"]},
+            "y": {"file": "y_mesh", "properties": ["differentiable"]},
+            "z": {"file": "eta", "properties": ["not differentiable"]}
         },
         "data_out": {
             "h": "dep.out",
