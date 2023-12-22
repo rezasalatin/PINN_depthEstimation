@@ -15,7 +15,9 @@ import matplotlib.pyplot as plt
 import datetime
 import os
 import json
-from physics_functions import Boussinesq_simple as physics
+from physics import Boussinesq_simple as physics
+import operations as op
+from dnn import DNN
 
 np.random.seed(1234)
 
@@ -39,35 +41,6 @@ folder_name = now.strftime("log_%Y%m%d_%H%M")
 # Create a directory with the folder_name
 log_dir = f"../log/{folder_name}"
 os.makedirs(log_dir, exist_ok=True)
-
-# the deep neural network
-class DNN(nn.Module):
-
-    def __init__(self, layers):
-        super(DNN, self).__init__()
-        self.layers = nn.Sequential(self._build_layers(layers))
-
-    def _build_layers(self, layers):
-        layer_list = []
-        num_layers = len(layers)
-
-        for i in range(num_layers - 1):
-            linear_layer = nn.Linear(layers[i], layers[i + 1])
-            DNN._initialize_layer(linear_layer, zero_bias=(i < num_layers - 2))
-
-            layer_list.append((f'layer_{i}', linear_layer))
-            if i < num_layers - 2:
-                layer_list.append((f'activation_{i}', nn.Tanh()))
-
-        return OrderedDict(layer_list)
-
-    def _initialize_layer(layer, zero_bias=True):
-        nn.init.xavier_uniform_(layer.weight)
-        if zero_bias:
-            nn.init.zeros_(layer.bias)
-
-    def forward(self, x):
-        return self.layers(x)
     
 # the physics-guided neural network
 class PINN():
@@ -89,6 +62,10 @@ class PINN():
         # layers of NN
         self.layers = layers
         self.dnn = DNN(layers).to(device)
+
+        # max iteration for optimizers
+        self.AdamIt = AdamIt
+        self.LBFGSIt = LBFGSIt
 
         # Initialize iteration counter
         self.iter = 0
@@ -112,7 +89,7 @@ class PINN():
         # L-BFGS optimizer
         self.optimizer_LBFGS = torch.optim.LBFGS(
             self.dnn.parameters(), 
-            lr = config['optimizer']['lbfgs_learning_rate']
+            lr = config['optimizer']['lbfgs_learning_rate'],
             max_iter = config['optimizer']['lbfgs_max_iteration'], 
             max_eval = config['optimizer']['lbfgs_max_evaluation'], 
             history_size = config['optimizer']['lbfgs_history_size'],
@@ -181,37 +158,6 @@ class PINN():
             loss.backward()
             return loss
         self.optimizer_LBFGS.step(closure)
-
-    
-    # Testing: Prediction
-    def predict(self, X):
-        in0 = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
-        in1 = torch.tensor(X[:, 1:2], requires_grad=True).float().to(device)
-        in2 = torch.tensor(X[:, 2:3], requires_grad=True).float().to(device)
-        in3 = torch.tensor(X[:, 3:4]).float().to(device)
-        output = self.dnn(in0, in1, in2, in3)
-        out0 = output[:, 0:1].to(device)
-        out1 = output[:, 1:2].to(device)
-        out2 = output[:, 2:3].to(device)
-        out3 = output[:, 3:4].to(device)
-        return out0, out1, out2, out3
-
-    # Testing: On the fly residual loss calculator
-    def loss_func_otf(self, new_data):
-        in0, in1, in2, in3, in4, in5, in6 = [torch.tensor(new_data[:, i:i+1]).float().to(device) for i in range(7)]  # Adjust indices based on new_data structure
-        outf = torch.cat([in3, in4, in5, in6], dim=1)
-        loss = physics(outf, in0, in1, in2, device)
-        return loss
-    
-    # Testing: On the fly model update with L-BFGS
-    def update_model_otf(self, new_data):
-        def closure():
-            self.optimizer_LBFGS.zero_grad()
-            loss = self.loss_func_otf(new_data)
-            loss.backward()
-            return loss
-        # Perform one optimization step
-        self.optimizer_LBFGS.step(closure)
     
 # Main
 if __name__ == "__main__": 
@@ -222,109 +168,81 @@ if __name__ == "__main__":
     hidden_width = config['layers']['hidden_width']
     output_features = config['layers']['output_features']
     layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
-    
+    # Optimizer parameters
+    adam_maxit = config['adam_optimizer']['max_it']
+    lbfgs_maxit = config['lbfgs_optimizer']['max_it']
+
+    #########################################
     ########### Data for Fidelity ###########
     # Extract all data from csv file.
-    data_fidelity_dir = config['data']['data_fidelity_dir']
-    data_fidelity = np.genfromtxt(data_fidelity_dir, delimiter=' ').astype(np.float64) # load data
+    dir = config['data_fidelity']['dir']
+    data = np.genfromtxt(dir, delimiter=' ', dtype=None, names=True, encoding=None)
 
-    # Create a dictionary to hold the different data columns
-    data_fidelity_dict = {}
-    data_fidelity_names = config['data']['data_fidelity_names']  # List of column names
-    for i, name in enumerate(data_fidelity_names):
-        data_fidelity_dict[name] = data_fidelity[:, i:i+1]
-    
-    # Create fidelity data by hstacking the values from the dictionary
-    data_fidelity = np.hstack([data_fidelity_dict[key] for key in data_fidelity_names])
+    # Create dictionaries for input and output data columns
+    fidelity_in, fidelity_out = {}, {}
+    vars_in = config['data_fidelity']['data_in']    # List of input variable names
+    vars_out = config['data_fidelity']['data_out']   # List of exact/output variable names
 
-    # Normalization input data
-    def normalize(data, data_min, data_max):
-        return 2 * (data - data_min) / (data_max - data_min) - 1
-    
-    # Stacking and normalizing
-    data_fidelity_names_normalize = config["data_normalize"]
-    data_fidelity_training = []
-    for key in data_fidelity_names:
-        column = data_fidelity_dict[key]
-        if key in data_fidelity_names_normalize:
-            column_min = np.min(column)
-            column_max = np.max(column)
-            column = normalize(column, column_min, column_max)
-        data_fidelity_training.append(column)
-    data_fidelity_training = np.hstack(data_fidelity_training)
+    # Iterate over the columns and assign them to the respective dictionaries
+    for key in data.dtype.names:
+        if key in vars_in:
+            fidelity_in[key] = data[key]
+        if key in vars_out:
+            fidelity_out[key] = data[key]
 
-    # select training points randomly from the domain.
-    Ntrain = config['Num_Training']
-    idx = np.random.choice(data_fidelity_training.shape[0], Ntrain, replace=False)
-    data_fidelity_training = data_fidelity_training[idx,:]
+    # Normalize input data
+    in_min_max = op.get_min_max(fidelity_in)
+    for key in fidelity_in:
+        fidelity_in[key] = op.normalize(fidelity_in[key], in_min_max[key][0], in_min_max[key][1])
 
+    # Single NumPy array from dictionaries
+    fidelity_in_array = np.column_stack([fidelity_in[key] for key in vars_in])
+    fidelity_out_array = np.column_stack([fidelity_out[key] for key in vars_out])
+
+    # select n training points randomly from the domain.
+    n_training = config['data_fidelity']['training_points']
+    idx = np.random.choice(fidelity_in_array.shape[0], n_training, replace=False)
+    fidelity_in_train = fidelity_in_array[idx,:]
+    fidelity_out_train = fidelity_out_array[idx,:]
+
+    #########################################
     ########### Data for Residual ###########
-    # Create a dictionary to hold the different data columns
-    data_residual_dict = {}
-    data_residual_names = config['data']['data_residual_names']  # List of column names
-
-    # also get some snapshots from FUNWAVE-TVD for residual loss
-    funwave_dir = config['data']['funwave_dir']
-    grid_nx = config['data']['grid_nx']
-    grid_ny = config['data']['grid_ny']
-    grid_dx = config['data']['grid_dx']
-    grid_dy = config['data']['grid_dy']
-
-    # select all available points (gauges) for residuals
-    dx_interval = grid_dx*10
-    dy_interval = grid_dy*10
-    x_residual = np.arange(0, (grid_nx-1)*grid_dx + 1, grid_dx).astype(np.float64)
-    y_residual = np.arange(0, (grid_ny-1)*grid_dy + 1, grid_dy).astype(np.float64)
-
-    # meshgrid x and y and only keep selected points
-    X_residual, Y_residual = np.meshgrid(x_residual, y_residual)
-    X_residual = X_residual[::dx_interval, ::dy_interval]
-    Y_residual = Y_residual[::dx_interval, ::dy_interval]
-
-    # Flatten the X and Y arrays
-    X_residual_flat = X_residual.flatten().reshape(-1, 1)
-    Y_residual_flat = Y_residual.flatten().reshape(-1, 1)
-
-    data_residual_training = np.empty((0, input_features))
+    # FUNWAVE-TVD snapshots for residual loss
+    dir = config['data_residual']['dir']
+    vars_in = config['data_resisdual']['data_in']
+    vars_out = config['data_resisdual']['data_out']
     
-    data_residual_snapshots = config["data_residual_snapshots"]
+    residual_snaps = config['data_residual']['numerical_model_snapshots']
+    interval_x = config['data_residual']['interval_x']
+    interval_y = config['data_residual']['interval_y']
 
-    for t_residual in data_residual_snapshots:
-        
-        file_suffix = str(t_residual).zfill(5)  # Pad the number with zeros to make it 5 digits
-        
-        T_residual = np.full((grid_nx, grid_ny), t_residual, dtype=np.float64)
-        T_residual = T_residual[::dx_interval, ::dy_interval]
-        T_residual_flat = T_residual.flatten().reshape(-1, 1)
-        
-        Z_residual = np.loadtxt(funwave_dir + f'/eta_{file_suffix}')
-        Z_residual = Z_residual[::dx_interval, ::dy_interval]
-        Z_residual_flat = Z_residual.flatten().reshape(-1, 1)
+    residual_in_train = []  # List to store the flattened data dictionaries
 
-        # Create new data for this iteration
-        new_data = np.hstack(
-            (T_residual_flat, X_residual_flat, Y_residual_flat, Z_residual_flat)
-             )
-        # Append new data to X_f_star
-        data_residual_training = np.vstack((data_residual_training, new_data))
+    for i in residual_snaps:
+        file_suffix = str(i).zfill(5)
+        
+        # Dictionary to store the loaded data
+        residual_in = {}
 
-    # Stacking and normalizing
-    data_residual_names = config["data_residual_names"]
-    data_residual_names_normalize = config["data_normalize"]
-    data_residual_training = []
-    for key in data_residual_names:
-        column = data_residual_dict[key]
-        if key in data_residual_names_normalize:
-            column_min = np.min(column)
-            column_max = np.max(column)
-            column = normalize(column, column_min, column_max)
-        data_residual_training.append(column)
-    data_residual_training = np.hstack(data_residual_training)
+        # Iterate over the mapping and load each file
+        for var_name, file_name in vars_in.items():
+
+            # 'x', 'y', and 'h' are not changing with time
+            if var_name in ['x', 'y', 'h']:
+                key = file_name
+            else:
+                key = f"{file_name}_{file_suffix}"
+
+            file_path = dir + key
+            residual_in[key] = np.loadtxt(file_path)
+
+            residual_in_array = np.column_stack([residual_in[key] for key in vars_in])
+       
+        # Append the flattened data dictionary for this snapshot to the list
+        residual_in_train.append(residual_in_array)
 
     # set up the pinn model
-    AdamIt = config['Adam_MaxIt']
-    LBFGSIt = config['LBFGS_MaxIt']
-    model = PINN(data_fidelity_training, data_residual_training, layers, AdamIt, LBFGSIt)
+    model = PINN(fidelity_in_train, fidelity_out_train, residual_in_train, layers, adam_maxit, lbfgs_maxit)
     
     ###### Training
     start_time = time.time()

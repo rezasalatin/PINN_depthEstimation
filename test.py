@@ -4,6 +4,39 @@ import matplotlib.pyplot as plt
 import os
 import json
 
+# Testing: Prediction
+def predict(self, X):
+    in0 = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
+    in1 = torch.tensor(X[:, 1:2], requires_grad=True).float().to(device)
+    in2 = torch.tensor(X[:, 2:3], requires_grad=True).float().to(device)
+    in3 = torch.tensor(X[:, 3:4]).float().to(device)
+    output = self.dnn(in0, in1, in2, in3)
+    out0 = output[:, 0:1].to(device)
+    out1 = output[:, 1:2].to(device)
+    out2 = output[:, 2:3].to(device)
+    out3 = output[:, 3:4].to(device)
+    return out0, out1, out2, out3
+
+# Testing: On the fly residual loss calculator
+def loss_func_otf(self, new_data):
+    in0, in1, in2, in3, in4, in5, in6 = [torch.tensor(new_data[:, i:i+1]).float().to(device) for i in range(7)]  # Adjust indices based on new_data structure
+    outf = torch.cat([in3, in4, in5, in6], dim=1)
+    loss = physics(outf, in0, in1, in2, device)
+    return loss
+
+# Testing: On the fly model update with L-BFGS
+def update_model_otf(self, new_data):
+    def closure():
+        self.optimizer_LBFGS.zero_grad()
+        loss = self.loss_func_otf(new_data)
+        loss.backward()
+        return loss
+    # Perform one optimization step
+    self.optimizer_LBFGS.step(closure)
+
+
+
+
 # Load configuration
 with open('config.json', 'r') as f:
     config = json.load(f)

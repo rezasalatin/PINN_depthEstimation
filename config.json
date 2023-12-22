@@ -1,25 +1,29 @@
 {
-    "Num_Training": 4800,
-    "Adam_MaxIt": 1000,
-    "LBFGS_MaxIt": 50000,
     "layers": {
         "input_features": 4,
         "hidden_layers": 20,
         "hidden_width": 20,
         "output_features": 4
     },
-    "optimizer": {
-        "adam_learning_rate": 1e-4,
+    
+    "adam_optimizer": {
+        "max_it": 1000,
+        "learning_rate": 1e-4,
         "scheduler_step_size": 10000,
-        "scheduler_gamma": 0.8,
-        "lbfgs_learning_rate": 1,
-        "lbfgs_max_iteration": 5e4,
-        "lbfgs_max_evaluation": 6.25e4,
-        "lbfgs_history_size": 100,
-        "lbfgs_tolerance_grad": 1e-5, 
-        "lbfgs_tolerance_change": 1e-7,
-        "lbfgs_line_search_fn": "strong_wolfe"
+        "scheduler_gamma": 0.8
     },
+
+    "lbfgs_optimizer": {
+        "max_it": 50000,
+        "learning_rate": 1,
+        "max_iteration": 5e4,
+        "max_evaluation": 6.25e4,
+        "history_size": 100,
+        "tolerance_grad": 1e-5, 
+        "tolerance_change": 1e-7,
+        "line_search_fn": "strong_wolfe"
+    },
+    
     "loss": {
         "weight_h": 1,
         "weight_z": 1000,
@@ -28,21 +32,40 @@
         "weight_fidelity": 1,
         "weight_residual": 1
     },
-    "data": {
-        "data_fidelity_dir": "../data/beach2d_reg.csv",
-        "data_fidelity_in": ["t", "x", "y", "z"],
-        "data_fidelity_ou": ["h", "z", "u", "v"],
-        "data_residual_in": ["t", "x", "y", "z"],
-        "data_residual_ou": ["h", "z", "u", "v"]
+    
+    "data_fidelity": {
+        "dir": "../data/beach2d_reg.csv",
+        "data_in": ["t", "x", "y", "z"],
+        "data_out": ["h", "z", "u", "v"],
+        "training_points": 100
     },
-    "numerical_model": {
+
+    "data_residual": {
         "dir": "../data/output_reg_pinn",
+        "data_in": {
+            "t": "t",
+            "x": "x_mesh",
+            "y": "y_mesh",
+            "z": "eta"
+        },
+        "data_out": {
+            "h": "dep.out",
+            "z": "eta",
+            "u": "u",
+            "v": "v"
+        },
+        "numerical_model_snapshots": [250, 302, 367, 299]
+    },
+    
+    "numerical_model": {
         "nx": 251,
         "ny": 501,
         "dx": 2,
         "dy": 2,
-        "numerical_model_snapshots": [250, 302, 367, 299]
+        "interval_x": 20,
+        "interval_y": 20
     },
+    
     "plot": {
         "figure_size": 14,
         "x_limits": [150, 450],
