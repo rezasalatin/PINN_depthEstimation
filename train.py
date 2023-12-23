@@ -43,29 +43,35 @@ log_dir = f"../log/{folder_name}"
 os.makedirs(log_dir, exist_ok=True)
     
 # the physics-guided neural network
-class PINN():
+class pinn():
 
     # Initializer
-    def __init__(self, data_fid, data_res, layers, AdamIt, LBFGSIt):
+    def __init__(self, fidelity_in_train, fidelity_out_train, residual_in_train):
         
-        # temporal and spatial information for fidelity part
-        num_columns = data_fid.shape[1]
+        # Create individual attributes for each column in fidelity_in_train
+        num_columns = fidelity_in_train.shape[1]
         for i in range(num_columns):
-            setattr(self, f'fid_in{i}', torch.tensor(data_fid[:, i:i+1]).float().to(device))
+            setattr(self, f'fidelity_in{i}', torch.tensor(fidelity_in_train[:, i:i+1]).float().to(device))
         
         # temporal and spatial information for physics part
-        num_columns_res = data_res.shape[1]
-        for i in range(num_columns_res):
-            requires_grad = True if i < 3 else False  # Set requires_grad=True for the first three columns (t,x,y)
-            setattr(self, f'res_in{i}', torch.tensor(data_res[:, i:i+1], requires_grad=requires_grad).float().to(device))
-
-        # layers of NN
-        self.layers = layers
-        self.dnn = DNN(layers).to(device)
+        vars_in = config['data_residual']['data_in']  # Get the variable configuration
+        num_columns = residual_in_train.shape[1]
+        for i, (var_name, var_info) in enumerate(vars_in.items()):
+            # Determine if the variable is differentiable
+            requires_grad = "true" in var_info["requires_grad"]
+            # Set the tensor with the appropriate requires_grad flag
+            setattr(self, f'residual_in{i}', torch.tensor(residual_in_train[:, i:i+1], requires_grad=requires_grad).float().to(device))
+            
+        # Define input, hidden, output layers, and DNN
+        self.input_features = config['layers']['input_features']
+        self.hidden_layers = config['layers']['hidden_layers']
+        self.hidden_width = config['layers']['hidden_width']
+        self.output_features = config['layers']['output_features']
+        self.layers = [self.input_features] + [self.hidden_width] * self.hidden_layers + [self.output_features]
+        self.dnn = DNN(self.layers).to(device)
 
         # max iteration for optimizers
-        self.AdamIt = AdamIt
-        self.LBFGSIt = LBFGSIt
+        self.adam_maxit = config['adam_optimizer']['max_it']
 
         # Initialize iteration counter
         self.iter = 0
@@ -76,8 +82,7 @@ class PINN():
         # Adam optimizer
         self.optimizer_Adam = torch.optim.Adam(
             self.dnn.parameters(), 
-            lr = config['adam_optimizer']['learning_rate'] # learning rate
-            max_iter = config['adam_optimizer']['max_it'], 
+            lr = config['adam_optimizer']['learning_rate'], # learning rate
         )
 
         # Define learning rate scheduler for Adam
@@ -102,42 +107,35 @@ class PINN():
     # Loss function
     def loss_func(self):
         
-        output_u_pred = self.dnn(self.t_u, self.x_u, self.y_u, self.z_u)
+        # Dynamic fidelity inputs
+        fidelity_inputs = [getattr(self, f'fidelity_in{i}') for i in range(self.num_fidelity_inputs)]
+        fidelity_outputs = self.dnn(*fidelity_inputs)
         
-        h_pred = output_u_pred[:, 0:1].to(device)
-        z_pred = output_u_pred[:, 1:2].to(device)
-        u_pred = output_u_pred[:, 2:3].to(device)
-        v_pred = output_u_pred[:, 3:4].to(device)
+        # Dynamic fidelity outputs and loss calculation
+        fidelity_loss = 0
+        for i in range(self.num_fidelity_outputs):
+            fid_out_i = fidelity_outputs[:, i:i+1].to(device)
+            fid_exact_i = getattr(self, f'fid_exact{i}')
+            fid_loss_i = torch.mean((fid_exact_i - fid_out_i)**2)
+            weight_fid_loss_i = config['loss'][f'weight_fid_loss{i}']
+            fidelity_loss += weight_fid_loss_i * fid_loss_i
         
-        loss_comp_h = torch.mean((self.h_u - h_pred)**2)
-        loss_comp_z = torch.mean((self.z_u - z_pred)**2)
-        loss_comp_u = torch.mean((self.u_u - u_pred)**2)
-        loss_comp_v = torch.mean((self.v_u - v_pred)**2)
-
-        # Fidelity loss
-        # Extracting loss weights from the config
-        weight_h = config['loss']['weight_h']
-        weight_z = config['loss']['weight_z']
-        weight_u = config['loss']['weight_u']
-        weight_v = config['loss']['weight_v']
-        loss_u = weight_h * loss_comp_h + weight_z * loss_comp_z \
-            + weight_u * loss_comp_u + weight_v * loss_comp_v
-        
-        # Residual loss
-        output_f_pred = self.dnn(self.t_f, self.x_f, self.y_f, self.z_f)
-        loss_f = physics(output_f_pred, self.t_f, self.x_f, self.y_f, device)
-        
+       # Dynamic residual inputs
+        residual_inputs = [getattr(self, f'residual_in{i}') for i in range(self.num_residual_inputs)]
+        residual_outputs = self.dnn(*residual_inputs)
+        residual_loss = physics(residual_outputs, *residual_inputs, device)
+    
         # Total loss
         weight_fidelity = config['loss']['weight_fidelity']
         weight_residual = config['loss']['weight_residual']
-        loss = weight_fidelity * loss_u + weight_residual * loss_f
+        loss = weight_fidelity * fidelity_loss + weight_residual * residual_loss
                 
         # iteration (epoch) counter
         self.iter += 1
         if self.iter % 100 == 0:
             print(
                 'Iter %d, Loss_u: %.5e, Loss_f: %.5e, Total Loss: %.5e' % 
-                (self.iter, loss_u.item(), loss_f.item(), loss.item()))
+                (self.iter, fidelity_loss.item(), residual_loss.item(), loss.item()))
 
         return loss
 
@@ -146,7 +144,7 @@ class PINN():
     def train(self):
         self.dnn.train()
         # Training with Adam optimizer
-        for i in range(self.AdamIt):
+        for i in range(self.adam_maxit):
             self.optimizer_Adam.zero_grad()
             loss = self.loss_func()
             loss.backward()
@@ -162,16 +160,6 @@ class PINN():
     
 # Main
 if __name__ == "__main__": 
-    
-    # Define input, hidden, and output layers
-    input_features = config['layers']['input_features']
-    hidden_layers = config['layers']['hidden_layers']
-    hidden_width = config['layers']['hidden_width']
-    output_features = config['layers']['output_features']
-    layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
-    # Optimizer parameters
-    adam_maxit = config['adam_optimizer']['max_it']
-    lbfgs_maxit = config['lbfgs_optimizer']['max_it']
 
     #########################################
     ########### Data for Fidelity ###########
@@ -214,14 +202,14 @@ if __name__ == "__main__":
 
     # FUNWAVE-TVD snapshots for residual loss
     dir = config['data_residual']['dir']
-    vars_in = config['data_resisdual']['data_in']
-    vars_out = config['data_resisdual']['data_out']
+    vars_in = config['data_residual']['data_in']
+    vars_out = config['data_residual']['data_out']
     
     residual_snaps = config['data_residual']['numerical_model_snapshots']
-    interval_x = config['data_residual']['interval_x']
-    interval_y = config['data_residual']['interval_y']
+    interval_x = config['numerical_model']['interval_x']
+    interval_y = config['numerical_model']['interval_y']
 
-    residual_in_train = []  # List to store the flattened data dictionaries
+    residual_in_train = np.empty((0, len(vars_in)))  # Initialize as empty array with appropriate columns
 
     for i in residual_snaps:
         file_suffix = str(i).zfill(5)
@@ -230,24 +218,23 @@ if __name__ == "__main__":
         residual_in = {}
 
         # Iterate over the mapping and load each file
-        for var_name, file_name in vars_in.items():
-
-            # 'x', 'y', and 'h' are not changing with time
-            if var_name in ['x', 'y', 'h']:
-                key = file_name
-            else:
-                key = f"{file_name}_{file_suffix}"
-
-            file_path = dir + key
+        for key, value in vars_in.items():
+            
+            file_name = value["file"]  # Extract the file name
+    
+            # Determine the filename, considering time variation
+            fname = file_name if key in ['x', 'y', 'h'] else f"{file_name}_{file_suffix}"
+    
+            file_path = dir + fname
             residual_in[key] = np.loadtxt(file_path)
-
-            residual_in_array = np.column_stack([residual_in[key] for key in vars_in])
+    
+        residual_in_array = np.column_stack([residual_in[key].flatten() for key in vars_in])
        
-        # Append the flattened data dictionary for this snapshot to the list
-        residual_in_train.append(residual_in_array)
+        # Concatenate the new array to the existing residual_in_train
+        residual_in_train = np.vstack((residual_in_train, residual_in_array))
 
     # set up the pinn model
-    model = PINN(fidelity_in_train, fidelity_out_train, residual_in_train, layers, adam_maxit, lbfgs_maxit)
+    model = pinn(fidelity_in_train, fidelity_out_train, residual_in_train)
     
     ###### Training
     start_time = time.time()
