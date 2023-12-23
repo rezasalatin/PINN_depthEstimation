@@ -16,7 +16,6 @@
     "lbfgs_optimizer": {
         "max_it": 50000,
         "learning_rate": 1,
-        "max_iteration": 5e4,
         "max_evaluation": 6.25e4,
         "history_size": 100,
         "tolerance_grad": 1e-5, 

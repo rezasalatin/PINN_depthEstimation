@@ -76,26 +76,27 @@ class PINN():
         # Adam optimizer
         self.optimizer_Adam = torch.optim.Adam(
             self.dnn.parameters(), 
-            lr = config['optimizer']['adam_learning_rate'] # learning rate
+            lr = config['adam_optimizer']['learning_rate'] # learning rate
+            max_iter = config['adam_optimizer']['max_it'], 
         )
 
         # Define learning rate scheduler for Adam
         self.scheduler_Adam = torch.optim.lr_scheduler.StepLR(
             self.optimizer_Adam, 
-            step_size = config['optimizer']['scheduler_step_size'], 
-            gamma = config['optimizer']['scheduler_gamma']
+            step_size = config['adam_optimizer']['scheduler_step_size'], 
+            gamma = config['adam_optimizer']['scheduler_gamma']
         )
 
         # L-BFGS optimizer
         self.optimizer_LBFGS = torch.optim.LBFGS(
             self.dnn.parameters(), 
-            lr = config['optimizer']['lbfgs_learning_rate'],
-            max_iter = config['optimizer']['lbfgs_max_iteration'], 
-            max_eval = config['optimizer']['lbfgs_max_evaluation'], 
-            history_size = config['optimizer']['lbfgs_history_size'],
-            tolerance_grad = config['optimizer']['lbfgs_tolerance_grad'],
-            tolerance_change = config['optimizer']['lbfgs_tolerance_change'],
-            line_search_fn = config['optimizer']['lbfgs_line_search_fn']
+            lr = config['lbfgs_optimizer']['learning_rate'],
+            max_iter = config['lbfgs_optimizer']['max_it'], 
+            max_eval = config['lbfgs_optimizer']['max_evaluation'], 
+            history_size = config['lbfgs_optimizer']['history_size'],
+            tolerance_grad = config['lbfgs_optimizer']['tolerance_grad'],
+            tolerance_change = config['lbfgs_optimizer']['tolerance_change'],
+            line_search_fn = config['lbfgs_optimizer']['line_search_fn']
         )    
 
     # Loss function
@@ -174,6 +175,8 @@ if __name__ == "__main__":
 
     #########################################
     ########### Data for Fidelity ###########
+    #########################################
+    
     # Extract all data from csv file.
     dir = config['data_fidelity']['dir']
     data = np.genfromtxt(dir, delimiter=' ', dtype=None, names=True, encoding=None)
@@ -207,6 +210,8 @@ if __name__ == "__main__":
 
     #########################################
     ########### Data for Residual ###########
+    #########################################
+
     # FUNWAVE-TVD snapshots for residual loss
     dir = config['data_residual']['dir']
     vars_in = config['data_resisdual']['data_in']
