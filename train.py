@@ -134,7 +134,7 @@ class pinn():
         self.iter += 1
         if self.iter % 100 == 0:
             print(
-                'Iter %d, Loss_u: %.5e, Loss_f: %.5e, Total Loss: %.5e' % 
+                'Epoch %d, fidelity_loss: %.5e, residual_loss: %.5e, Total Loss: %.5e' % 
                 (self.iter, fidelity_loss.item(), residual_loss.item(), loss.item()))
 
         return loss

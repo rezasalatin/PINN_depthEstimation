@@ -1,3 +1,11 @@
+"""
+PINN training for Boussinesq 2d
+@author: Reza Salatin
+@email: reza.salatin@whoi.edu
+December 2023
+w/ Pytorch
+"""
+
 from collections import OrderedDict
 import torch.nn as nn
 
