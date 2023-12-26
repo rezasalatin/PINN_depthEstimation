@@ -24,30 +24,30 @@
     },
     
     "loss": {
-        "weight_h": 1,
-        "weight_z": 1000,
-        "weight_u": 1,
-        "weight_v": 1,
-        "weight_fidelity": 1,
-        "weight_residual": 1
+        "weight_fid_loss0": 1,
+        "weight_fid_loss1": 1000,
+        "weight_fid_loss2": 1,
+        "weight_fid_loss3": 1,
+        "weight_fid_loss": 1,
+        "weight_res_loss": 1
     },
     
     "data_fidelity": {
         "dir": "../data/beach2d_reg.csv",
-        "data_in": ["t", "x", "y", "z"],
-        "data_out": ["h", "z", "u", "v"],
+        "inputs": ["t", "x", "y", "z"],
+        "outputs": ["h", "z", "u", "v"],
         "training_points": 100
     },
 
     "data_residual": {
         "dir": "../data/output_reg_pinn/",
-        "data_in": {
+        "inputs": {
             "t": {"file": "t", "requires_grad": ["true"]},
             "x": {"file": "X", "requires_grad": ["true"]},
             "y": {"file": "Y", "requires_grad": ["true"]},
             "z": {"file": "eta", "requires_grad": ["false"]}
         },
-        "data_out": {
+        "outputs": {
             "h": "dep.out",
             "z": "eta",
             "u": "u",
