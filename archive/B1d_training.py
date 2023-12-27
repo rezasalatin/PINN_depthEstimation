@@ -247,7 +247,7 @@ if __name__ == "__main__":
     # Construct the layers list
     layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
     # Extract all data.
-    data = np.genfromtxt('../pinn_data/beach_1d_dt001.csv', delimiter=' ').astype(np.float32) # load data
+    data = np.genfromtxt('../../data/one_d_funwave_reg.csv', delimiter=' ').astype(np.float32) # load data
     t_all = data[:, 0:1].astype(np.float64)
     x_all = data[:, 1:2].astype(np.float64)
     y_all = data[:, 2:3].astype(np.float64)

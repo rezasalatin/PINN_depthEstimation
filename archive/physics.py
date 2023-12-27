@@ -17,15 +17,6 @@ def compute_gradient(pred, var):
 ###########################################################
 def Boussinesq_simple(t, x, y, h, z, u, v, device):
     
-    t = t.to(device)
-    x = x.to(device)
-    y = y.to(device)
-
-    h = h.to(device)
-    z = z.to(device)
-    u = u.to(device)
-    v = v.to(device)
-    
     # This u is not correct. It is at a specific depth. For equations, calculate the u at the surface.
 
     u_t = compute_gradient(u, t)

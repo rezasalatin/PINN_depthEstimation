@@ -13,7 +13,7 @@ import time
 import matplotlib.pyplot as plt
 import datetime
 import os
-from physics_functions import Boussinesq_simple as physics
+from physics import Boussinesq_simple as physics
 
 np.random.seed(1234)
 
@@ -261,13 +261,13 @@ if __name__ == "__main__":
     output_features = 4 # h, eta, u, v
     layers = [input_features] + [hidden_width] * hidden_layers + [output_features]
     
-    funwave_dir = '../data/output_reg_pinn'
+    funwave_dir = '../../data/output_reg_pinn'
     x_grid = 251
     y_grid = 501
     dx = 2
     dy = 2
     
-    training_data_dir = '../data/beach2d_reg.csv'
+    training_data_dir = '../../data/beach2d_reg.csv'
     
     # Extract all data from csv file.
     data = np.genfromtxt(training_data_dir, delimiter=' ').astype(np.float32) # load data

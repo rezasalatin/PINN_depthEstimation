@@ -7,15 +7,12 @@ w/ Pytorch
 """
 
 import torch
-from torch import nn
-from collections import OrderedDict
 import numpy as np
 import time
-import matplotlib.pyplot as plt
 import datetime
 import os
 import json
-from physics import Boussinesq_simple as physics
+from physics import Boussinesq_simple as physics_loss_calculator
 import operations as op
 from dnn import DNN
 
@@ -46,7 +43,7 @@ os.makedirs(log_dir, exist_ok=True)
 class pinn():
 
     # Initializer
-    def __init__(self, fidelity_input_train, fidelity_true_train, residual_input_train):
+    def __init__(self, fidelity_input, fidelity_true, residual_input):
             
         # Define input, hidden, output layers, and DNN
         self.input_features = config['layers']['input_features']
@@ -65,19 +62,21 @@ class pinn():
         self.iter = 0
         
         # Create individual attributes for each column in fidelity_input_train
-        inputs = config['data_fidelity']['inputs']          
-        for i, var_name in enumerate(inputs):
-            setattr(self, f'fidelity_input_{i}', torch.tensor(fidelity_input_train[:, i:i+1]).float().to(device))
+        self.fidelity_input_vars = config['data_fidelity']['inputs']          
+        for i, var_name in enumerate(self.fidelity_input_vars):
+            setattr(self, f'fidelity_input_{var_name}', torch.tensor(fidelity_input[:, i:i+1]).float().to(device))
 
-        outputs = config['data_fidelity']['outputs']   
-        for i, var_name in enumerate(outputs):
-            setattr(self, f'fidelity_true_{i}', torch.tensor(fidelity_true_train[:, i:i+1]).float().to(device))
+        self.fidelity_output_vars = config['data_fidelity']['outputs']   
+        for i, var_name in enumerate(self.fidelity_output_vars):
+            setattr(self, f'fidelity_true_{var_name}', torch.tensor(fidelity_true[:, i:i+1]).float().to(device))
         
         # temporal and spatial information for physics part
-        inputs = config['data_residual']['inputs']  # Get the variable configuration
-        for i, (var_name, var_info) in enumerate(inputs.items()):
+        self.residual_input_vars = config['data_residual']['inputs']  # Get the variable configuration
+        for i, (var_name, var_info) in enumerate(self.residual_input_vars.items()):
             requires_grad = "true" in var_info["requires_grad"]
-            setattr(self, f'residual_input_{i}', torch.tensor(residual_input_train[:, i:i+1], requires_grad=requires_grad).float().to(device))
+            setattr(self, f'residual_input_{var_name}', torch.tensor(residual_input[:, i:i+1], requires_grad=requires_grad).float().to(device))
+            
+        self.residual_output_vars = config['data_residual']['outputs']  # Get the variable configuration
 
     # Initialize optimizers
     def init_optimizers(self):
@@ -111,20 +110,29 @@ class pinn():
     def loss_func(self):
         
         # Dynamic fidelity inputs
-        fidelity_inputs = [getattr(self, f'fidelity_input_{i}') for i in range(self.input_features)]
-        fidelity_predictions = self.dnn(torch.cat(fidelity_inputs, dim=-1))
-        
+        inputs = [getattr(self, f'fidelity_input_{var_name}') for i, var_name in enumerate(self.fidelity_input_vars)]
+        inputs = torch.cat(inputs, dim=-1)
+        predictions = self.dnn(inputs)
+        # fidelity_loss = fidelity_loss_calculator(predictions, true, device)
         # Dynamic fidelity outputs and loss calculation
         fidelity_loss = 0
-        for i in range(self.output_features):
-            pred = fidelity_predictions[:, i:i+1].to(device)
-            true = getattr(self, f'fidelity_true_{i}')
+        for i, var_name in enumerate(self.fidelity_output_vars):
+            pred = predictions[:, i:i+1].to(device)
+            true = getattr(self, f'fidelity_true_{var_name}')
             fidelity_loss += torch.mean((true - pred)**2)
         
        # Dynamic residual inputs
-        residual_inputs = [getattr(self, f'residual_input_{i}') for i in range(self.input_features)]
-        residual_outputs = self.dnn(torch.cat(residual_inputs, dim=-1))
-        residual_loss = physics(residual_outputs, residual_inputs, device)
+        inputs = [getattr(self, f'residual_input_{var_name}') for i, var_name in enumerate(self.residual_input_vars)]
+        predictions = self.dnn(torch.cat(inputs, dim=-1))
+        for i, var_name in enumerate(self.residual_output_vars):
+            setattr(self, f'residual_pred_{var_name}', predictions[:, i:i+1])
+                    
+        residual_loss = physics_loss_calculator(
+            self.residual_input_t, self.residual_input_x, self.residual_input_y, \
+            self.residual_pred_h, self.residual_pred_z, self.residual_pred_u, \
+            self.residual_pred_v, device)
+            
+        
         # Total loss
         weight_fidelity = config['loss']['weight_fid_loss']
         weight_residual = config['loss']['weight_res_loss']
