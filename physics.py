@@ -15,19 +15,8 @@ def compute_gradient(pred, var):
 
 
 ###########################################################
-def Boussinesq_simple(t, x, y, h, z, u, v, device):
+def Boussinesq_simple(t, x, y, h, z, u, v):
     
-    t = t.to(device)
-    x = x.to(device)
-    y = y.to(device)
-
-    h = h.to(device)
-    z = z.to(device)
-    u = u.to(device)
-    v = v.to(device)
-    
-    # This u is not correct. It is at a specific depth. For equations, calculate the u at the surface.
-
     u_t = compute_gradient(u, t)
     u_x = compute_gradient(u, x)
     u_y = compute_gradient(u, y)
@@ -40,14 +29,13 @@ def Boussinesq_simple(t, x, y, h, z, u, v, device):
     z_x = compute_gradient(z, x)
     z_y = compute_gradient(z, y)
 
-    # Higher orders (refer to Shi et al. 2012, Ocean Modeling)
     hu = h * u
     hv = h * v
     hu_x = compute_gradient(hu, x)
     hv_y = compute_gradient(hv, y)
 
     # loss with physics (Navier Stokes / Boussinesq etc)
-    f_cont = z_t + hu_x + hv_y # continuity eq.
+    f_cont = z_t + hu_x + hv_y                      # continuity eq.
     f_momx = u_t + u * u_x + v * u_y + 9.81 * z_x   # momentum in X dir
     f_momy = v_t + u * v_x + v * v_y + 9.81 * z_y   # momentum in Y dir
     
@@ -55,8 +43,8 @@ def Boussinesq_simple(t, x, y, h, z, u, v, device):
 
     return loss_f
     
-    ###########################################################
-def Boussinesq(output, t, x, y, device):
+###########################################################
+def Boussinesq(output, t, x, y):
 
     h_pred = output[:, 0:1].to(device)
     z_pred = output[:, 1:2].to(device)

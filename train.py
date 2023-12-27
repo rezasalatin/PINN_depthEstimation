@@ -71,12 +71,12 @@ class pinn():
             setattr(self, f'fidelity_true_{var_name}', torch.tensor(fidelity_true[:, i:i+1]).float().to(device))
         
         # temporal and spatial information for physics part
-        self.residual_input_vars = config['data_residual']['inputs']  # Get the variable configuration
+        self.residual_input_vars = config['data_residual']['inputs']
         for i, (var_name, var_info) in enumerate(self.residual_input_vars.items()):
             requires_grad = "true" in var_info["requires_grad"]
             setattr(self, f'residual_input_{var_name}', torch.tensor(residual_input[:, i:i+1], requires_grad=requires_grad).float().to(device))
-            
-        self.residual_output_vars = config['data_residual']['outputs']  # Get the variable configuration
+
+        self.residual_output_vars = config['data_residual']['outputs']
 
     # Initialize optimizers
     def init_optimizers(self):
@@ -123,16 +123,15 @@ class pinn():
         
        # Dynamic residual inputs
         inputs = [getattr(self, f'residual_input_{var_name}') for i, var_name in enumerate(self.residual_input_vars)]
+        for var_name in self.residual_input_vars:
+            setattr(self, var_name, getattr(self, f'residual_input_{var_name}'))
+            
         predictions = self.dnn(torch.cat(inputs, dim=-1))
         for i, var_name in enumerate(self.residual_output_vars):
-            setattr(self, f'residual_pred_{var_name}', predictions[:, i:i+1])
+            setattr(self, var_name, predictions[:, i:i+1])
                     
-        residual_loss = physics_loss_calculator(
-            self.residual_input_t, self.residual_input_x, self.residual_input_y, \
-            self.residual_pred_h, self.residual_pred_z, self.residual_pred_u, \
-            self.residual_pred_v, device)
+        residual_loss = physics_loss_calculator(self.t, self.x, self.y, self.h, self.z, self.u, self.v)
             
-        
         # Total loss
         weight_fidelity = config['loss']['weight_fid_loss']
         weight_residual = config['loss']['weight_res_loss']
@@ -140,10 +139,23 @@ class pinn():
                 
         # iteration (epoch) counter
         self.iter += 1
+        
+        log_file_path = os.path.join(log_dir, 'log.txt')
+        
+        # Check if the file exists and is empty; if so, write the header
+        if not os.path.exists(log_file_path) or os.stat(log_file_path).st_size == 0:
+           with open(log_file_path, 'w') as log_file:
+               log_file.write('Epoch, Fidelity Loss, Residual Loss, Total Loss\n')
+               
+        # Create a formatted string for the log values
+        log_values = f'{self.iter}, {fidelity_loss.item():.5e}, {residual_loss.item():.5e}, {loss.item():.5e}\n'
+        # Write the log values to a file
+        with open(log_file_path, 'a') as log_file:
+            log_file.write(log_values)
+        
         if self.iter % 100 == 0:
-            print(
-                'Epoch %d, fidelity_loss: %.5e, residual_loss: %.5e, Total Loss: %.5e' % 
-                (self.iter, fidelity_loss.item(), residual_loss.item(), loss.item()))
+            # Print the log values
+            print(f'Epoch {self.iter}, fidelity_loss: {fidelity_loss.item():.5e}, residual_loss: {residual_loss.item():.5e}, Total Loss: {loss.item():.5e}')
 
         return loss
 
@@ -229,7 +241,9 @@ if __name__ == "__main__":
             file_name = value["file"]
             fname = file_name if key in ['x', 'y', 'h'] else f"{file_name}_{file_suffix}"    
             file_path = dir + fname
-            residual_input[key] = np.loadtxt(file_path)
+            data = np.loadtxt(file_path)
+            data = data[::interval_y, ::interval_x]
+            residual_input[key] = data
     
         residual_input = np.column_stack([residual_input[key].flatten() for key in inputs])
        

@@ -1,13 +1,13 @@
 {
     "layers": {
-        "input_features": 4,
+        "input_features": 5,
         "hidden_layers": 20,
         "hidden_width": 20,
         "output_features": 4
     },
     
     "adam_optimizer": {
-        "max_it": 1000,
+        "max_it": 20000,
         "learning_rate": 1e-4,
         "scheduler_step_size": 10000,
         "scheduler_gamma": 0.8
@@ -24,19 +24,15 @@
     },
     
     "loss": {
-        "weight_fid_loss0": 1,
-        "weight_fid_loss1": 1000,
-        "weight_fid_loss2": 1,
-        "weight_fid_loss3": 1,
         "weight_fid_loss": 1,
         "weight_res_loss": 1
     },
     
     "data_fidelity": {
         "dir": "../data/beach2d_reg.csv",
-        "inputs": ["t", "x", "y", "z"],
+        "inputs": ["t", "x", "y", "u", "v"],
         "outputs": ["h", "z", "u", "v"],
-        "training_points": 100
+        "training_points": 1000
     },
 
     "data_residual": {
@@ -45,7 +41,8 @@
             "t": {"file": "t", "requires_grad": ["true"]},
             "x": {"file": "X", "requires_grad": ["true"]},
             "y": {"file": "Y", "requires_grad": ["true"]},
-            "z": {"file": "eta", "requires_grad": ["false"]}
+            "u": {"file": "u", "requires_grad": ["false"]},
+            "v": {"file": "v", "requires_grad": ["false"]}
         },
         "outputs": {
             "h": "dep.out",
@@ -61,8 +58,8 @@
         "ny": 501,
         "dx": 2,
         "dy": 2,
-        "interval_x": 20,
-        "interval_y": 20
+        "interval_x": 10,
+        "interval_y": 10
     },
     
     "plot": {
