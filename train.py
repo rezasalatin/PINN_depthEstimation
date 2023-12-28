@@ -185,14 +185,14 @@ if __name__ == "__main__":
     ########### Data for Fidelity ###########
     #########################################
     
-    dir = config['data_fidelity']['dir']            # Data directory
+    folder = config['data_fidelity']['dir']            # Data directory
     inputs = config['data_fidelity']['inputs']      # List of input variable names
     outputs = config['data_fidelity']['outputs']    # List of exact/output variable names
 
     # Create dictionaries for input and output data columns
     fidelity_input, fidelity_true = {}, {}
     # Extract all data from csv file.
-    data = np.genfromtxt(dir, delimiter=' ', dtype=None, names=True, encoding=None)
+    data = np.genfromtxt(folder, delimiter=' ', dtype=None, names=True, encoding=None)
 
     # Iterate over the columns and assign them to the respective dictionaries
     for key in data.dtype.names:
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     ########### Data for Residual ###########
     #########################################
 
-    dir = config['data_residual']['dir']
+    folder = config['data_residual']['dir']
     inputs = config['data_residual']['inputs']
     outputs = config['data_residual']['outputs']
     
@@ -240,7 +240,7 @@ if __name__ == "__main__":
             
             file_name = value["file"]
             fname = file_name if key in ['x', 'y', 'h'] else f"{file_name}_{file_suffix}"    
-            file_path = dir + fname
+            file_path = folder + fname
             data = np.loadtxt(file_path)
             data = data[::interval_y, ::interval_x]
             residual_input[key] = data
@@ -256,7 +256,7 @@ if __name__ == "__main__":
     ###### Training
     start_time = time.time()
     model.train()
-    elapsed = time.time() - start_time                    
+    elapsed = time.time() - start_time
     print('Training time: %.4f' % elapsed)
     # Save the trained model
     torch.save(model.dnn, os.path.join(log_dir, 'model.pth'))

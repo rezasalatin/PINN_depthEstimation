@@ -3,112 +3,95 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import json
+import operations as op
 
-# Testing: Prediction
-def predict(self, X):
-    in0 = torch.tensor(X[:, 0:1], requires_grad=True).float().to(device)
-    in1 = torch.tensor(X[:, 1:2], requires_grad=True).float().to(device)
-    in2 = torch.tensor(X[:, 2:3], requires_grad=True).float().to(device)
-    in3 = torch.tensor(X[:, 3:4]).float().to(device)
-    output = self.dnn(in0, in1, in2, in3)
-    out0 = output[:, 0:1].to(device)
-    out1 = output[:, 1:2].to(device)
-    out2 = output[:, 2:3].to(device)
-    out3 = output[:, 3:4].to(device)
-    return out0, out1, out2, out3
-
-# Testing: On the fly residual loss calculator
-def loss_func_otf(self, new_data):
-    in0, in1, in2, in3, in4, in5, in6 = [torch.tensor(new_data[:, i:i+1]).float().to(device) for i in range(7)]  # Adjust indices based on new_data structure
-    outf = torch.cat([in3, in4, in5, in6], dim=1)
-    loss = physics(outf, in0, in1, in2, device)
-    return loss
-
-# Testing: On the fly model update with L-BFGS
-def update_model_otf(self, new_data):
-    def closure():
-        self.optimizer_LBFGS.zero_grad()
-        loss = self.loss_func_otf(new_data)
-        loss.backward()
-        return loss
-    # Perform one optimization step
-    self.optimizer_LBFGS.step(closure)
-
-
-
-
-# Load configuration
-with open('config.json', 'r') as f:
-    config = json.load(f)
-
-# Set device for PyTorch
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-# Load the trained model
-model_path = os.path.join('../log/', 'model.pth')  # Adjust the path as needed
-model = torch.load(model_path, map_location=device)
-model.eval()  # Set the model to evaluation mode
-
-# Setup for testing
-funwave_dir = config['data']['funwave_dir']
-grid_x = config['data']['grid_x']
-grid_y = config['data']['grid_y']
-dx = config['data']['dx']
-dy = config['data']['dy']
-
-current_avg = 60 # seconds or 5Tp
-window_size = 60
-t_final = 500
-
-# initiate for current calculations
-    U_all_pred = np.zeros((grid_x*grid_y, window_size))
-    V_all_pred = U_all_pred
-    U_all_test = U_all_pred
-    V_all_test = U_all_pred
-
-    x_test = np.arange(0, (grid_x-1)*dx + 1, dx).astype(np.float64)
-    y_test = np.arange(0, (grid_y-1)*dy + 1, dy).astype(np.float64)
-    X_test, Y_test = np.meshgrid(x_test, y_test)
-    # Flatten the X and Y arrays
-    X_test_flat = X_test.flatten().reshape(-1, 1)
-    Y_test_flat = Y_test.flatten().reshape(-1, 1)
-
-    # get bathymetry file and flatten it
-    h_test = np.loadtxt(funwave_dir + '/dep.out')
-    h_test_flat = h_test.flatten().reshape(-1, 1)
-
-    for t in range(0,t_final+1):
-
-        T_test = np.full((grid_x, grid_y), t, dtype=np.float64)
-        T_test_flat = T_test.flatten().reshape(-1, 1)
-
-        file_suffix = str(t).zfill(5)  # Pad the number with zeros to make it 5 digits
-        Z_test = np.loadtxt(funwave_dir + f'/eta_{file_suffix}')  # Construct the file name
-        Z_test_flat = Z_test.flatten().reshape(-1, 1)
+class pinn:
+    def __init__(self, model_path, device):
+        self.model = torch.load(model_path, map_location=device)
+        self.model.eval()  # Set the model to evaluation mode
+        self.device = device
         
-        U_test = np.loadtxt(funwave_dir + f'/u_{file_suffix}')
-        U_test_flat = U_test.flatten().reshape(-1, 1)
+        # data
+        self.input_vars = config['data_residual']['inputs']
+        self.output_vars = config['data_residual']['outputs']
 
-        V_test = np.loadtxt(funwave_dir + f'/v_{file_suffix}')
-        V_test_flat = V_test.flatten().reshape(-1, 1)
+    def prepare_input_data(self, input_data):
+        # Normalize input data
+        input_min_max = op.get_min_max(input_data)
+        for key in input_data:
+            input_data[key] = op.normalize(input_data[key], input_min_max[key][0], input_min_max[key][1])
+            
+        input_data = np.column_stack([input_data[key].flatten() for key in input_data])
+        return input_data
 
-        # make inputs ready for NN
-        X_star = np.hstack((T_test_flat, X_test_flat, Y_test_flat, Z_test_flat))
+    def predict(self, input_data):
+        # Convert input data to tensor and send to device
+        input_tensor = torch.tensor(self.prepare_input_data(input_data)).float().to(device)
+        
+        with torch.no_grad():
+            predictions = self.model(input_tensor)
+        return predictions
 
-        # feed into NN and get outpus
-        h_pred, z_pred, u_pred, v_pred = model.predict(X_star)
+if __name__ == "__main__":
+    # Define device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # Load configuration if needed
+    with open('config.json', 'r') as f:
+        config = json.load(f)
+
+    # Define the path to the saved model
+    model_dir = config['test']['model_path']
+    model_path = os.path.join(model_dir, 'model.pth')
+    
+    # data
+    input_vars = config['data_residual']['inputs']
+    output_vars = config['data_residual']['outputs']
+    # Setup for testing
+    folder = config['numerical_model']['dir']
+    grid_x = config['numerical_model']['nx']
+    grid_y = config['numerical_model']['ny']
+    dx = config['numerical_model']['dx']
+    dy = config['numerical_model']['dy']
+    file_no = config['numerical_model']['number_of_files']
+    
+    # Initialize the predictor
+    predictor = pinn(model_path, device)
+    
+    for i in range(file_no):
+        file_suffix = str(i).zfill(5)
+        
+        # Dictionary to store the loaded data
+        inputs = {}
+
+        # Iterate over the mapping and load each file
+        for key, value in input_vars.items():
+            
+            file_name = value["file"]
+            fname = file_name if key in ['x', 'y', 'h'] else f"{file_name}_{file_suffix}"    
+            file_path = os.path.join(folder, fname)
+            data = np.loadtxt(file_path)
+            inputs[key] = data
+        
+        # Make predictions
+        predictions = predictor.predict(inputs)
+        
+        for i, var_name in enumerate(output_vars):
+            setattr(self, var_name, predictions[:, i:i+1])
+    
+'''
         
         h_pred = h_pred.detach().cpu().numpy()
         z_pred = z_pred.detach().cpu().numpy()
         u_pred = u_pred.detach().cpu().numpy()
         v_pred = v_pred.detach().cpu().numpy()        
-
+    
         # Reshape predictions to match original grid shape
         h_pred_reshaped = h_pred.reshape(X_test.shape)
         z_pred_reshaped = z_pred.reshape(X_test.shape)
         u_pred_reshaped = u_pred.reshape(X_test.shape)
         v_pred_reshaped = v_pred.reshape(X_test.shape)
-
+    
         # Moving average for current calculations
         U_all_pred[:, 0] = u_pred.flatten()
         V_all_pred[:, 0] = v_pred.flatten()
@@ -127,7 +110,7 @@ t_final = 500
         V_all_pred = np.roll(V_all_pred, shift=1, axis=1)
         U_all_test = np.roll(U_all_test, shift=1, axis=1)
         V_all_test = np.roll(V_all_test, shift=1, axis=1)
-
+    
         ########## Model update during testing
         # Format the predictions to match the training data structure
         new_data = np.hstack((T_test_flat, X_test_flat, Y_test_flat, h_pred, z_pred, u_pred, v_pred))
@@ -138,9 +121,9 @@ t_final = 500
         fsize = config['plot']['figure_size']
         x_limits = config['plot']['x_limits']
         y_limits = config['plot']['y_limits']
-
+    
         if t % 6 == 0:
-
+    
             ########## Fig 1
             # Plotting figure 1 for eta
             fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
@@ -157,7 +140,7 @@ t_final = 500
             plt.tight_layout()
             plt.show()
             plt.close()
-
+    
             ########## Fig 2
             # Plotting figure 1 for UV
             fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
@@ -182,7 +165,7 @@ t_final = 500
             plt.tight_layout()
             plt.show()
             plt.close()
-
+    
             ########## Fig 3
             # Plotting figure 3 for eta
             fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
@@ -199,7 +182,7 @@ t_final = 500
             plt.tight_layout()
             plt.show()
             plt.close()
-
+    
             ########## Fig 4
             # Plotting figure 1 for UV average
             fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
@@ -230,6 +213,8 @@ t_final = 500
         
         # Concatenate the predictions for saving
         # predictions = np.hstack([h_pred, z_pred, u_pred, v_pred])
-
+    
         # Save to a file
         # np.savetxt(f'../pinn_data/predictions_{file_suffix}.txt', predictions, delimiter=',', header='h_pred,z_pred,u_pred', comments='')
+
+'''

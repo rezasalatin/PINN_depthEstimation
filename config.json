@@ -36,7 +36,6 @@
     },
 
     "data_residual": {
-        "dir": "../data/output_reg_pinn/",
         "inputs": {
             "t": {"file": "t", "requires_grad": ["true"]},
             "x": {"file": "X", "requires_grad": ["true"]},
@@ -54,17 +53,24 @@
     },
     
     "numerical_model": {
+        "dir": "../data/output_reg_pinn",
         "nx": 251,
         "ny": 501,
         "dx": 2,
         "dy": 2,
         "interval_x": 10,
-        "interval_y": 10
+        "interval_y": 10,
+        "number_of_files": 501
     },
     
     "plot": {
         "figure_size": 14,
         "x_limits": [150, 450],
         "y_limits": [0, 1000]
+    },
+    
+    "test": {
+        "dir": "../data/output_reg_pinn",
+        "model_path": "../log/log_20231227_1232"
     }
 }
