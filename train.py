@@ -227,22 +227,43 @@ if __name__ == "__main__":
     residual_snaps = config['data_residual']['numerical_model_snapshots']
     interval_x = config['numerical_model']['interval_x']
     interval_y = config['numerical_model']['interval_y']
+    dx = config['numerical_model']['dx']
+    dy = config['numerical_model']['dy']
+    dt = config['numerical_model']['dt']
+    x_min = config['numerical_model']['x_min']
+    x_max = config['numerical_model']['x_max']
+    y_min = config['numerical_model']['y_min']
+    y_max = config['numerical_model']['y_max']
+
+    file_no = config['numerical_model']['number_of_files']
 
     residual_input_train = np.empty((0, len(inputs)))
-    for i in residual_snaps:
+
+    x = np.arange(x_min, x_max+1).astype(np.float64)
+    y = np.arange(y_min, y_max+1).astype(np.float64)
+    X_test, Y_test = np.meshgrid(x, y)
+
+    for i in range(file_no):
         file_suffix = str(i).zfill(5)
         
         # Dictionary to store the loaded data
-        residual_input = {}
+        test_input_data = {}
 
         # Iterate over the mapping and load each file
         for key, value in inputs.items():
             
             file_name = value["file"]
-            fname = file_name if key in ['x', 'y', 'h'] else f"{file_name}_{file_suffix}"    
-            file_path = folder + fname
-            data = np.loadtxt(file_path)
-            data = data[::interval_y, ::interval_x]
+            if key == 'x':
+                data = X_test
+            elif key == 'y':
+                data = Y_test
+            elif key == 't':
+                data = np.full(X_test.shape, (i-1)*dt, dtype=np.float64)
+            else:
+                fname = file_name if key == 'h' else f"{file_name}_{file_suffix}"    
+                file_path = os.path.join(folder, fname)
+                data = np.loadtxt(file_path)
+
             residual_input[key] = data
     
         residual_input = np.column_stack([residual_input[key].flatten() for key in inputs])
