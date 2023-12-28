@@ -243,7 +243,8 @@ if __name__ == "__main__":
     y = np.arange(y_min, y_max+1).astype(np.float64)
     X_test, Y_test = np.meshgrid(x, y)
 
-    for i in range(file_no):
+    for i in residual_snaps:
+        
         file_suffix = str(i).zfill(5)
         
         # Dictionary to store the loaded data
