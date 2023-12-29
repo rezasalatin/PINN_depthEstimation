@@ -51,38 +51,35 @@ class pinn:
     def test(self, test_input_data):
         test_input_data = torch.tensor(test_input_data).float().to(self.device)
         
-        # Splitting the concatenated data into individual tensors
-        tensors = []
-        start = 0
-        for var_name, var_info in self.test_input_vars.items():
-            size = var_info['size']  # Assuming 'size' key holds the size of each variable
-            tensor = test_input_data[:, start:start+size]
-            if "true" in var_info["requires_grad"]:
-                tensor.requires_grad_(True)
-            setattr(self, var_name, tensor)
-            tensors.append(tensor)
-            start += size
+        # temporal and spatial information for physics part
+        for i, (var_name, var_info) in enumerate(self.test_input_vars.items()):
+            requires_grad = "true" in var_info["requires_grad"]
+            setattr(self, var_name, torch.tensor(test_input_data[:, i:i+1], requires_grad=requires_grad).float().to(self.device))  
+        test_input_data = [getattr(self, var_name) for i, var_name in enumerate(self.test_input_vars)]
 
-        initial_predictions = self.model(torch.cat(tensors, dim=-1))
+        test_prediction_data = self.model(test_input_data)
 
-        for i, var_name in enumerate(self.test_output_vars):
-            setattr(self, var_name, initial_predictions[:, i:i+1])
+        # Check if optimization is to be performed
+        if self.config.get('perform_optimization', False):
 
-        def closure():
-            self.optimizer_LBFGS.zero_grad()
-            loss = physics_loss_calculator(self.t, self.x, self.y, self.h, self.z, self.u, self.v)
-            if loss.requires_grad:
-                loss.backward()
-            return loss
+            for i, var_name in enumerate(self.test_output_vars):
+                setattr(self, var_name, test_prediction_data[:, i:i+1])
 
-        self.optimizer_LBFGS.step(closure)
+            def closure():
+                self.optimizer_LBFGS.zero_grad()
+                loss = physics_loss_calculator(self.t, self.x, self.y, self.h, self.z, self.u, self.v)
+                if loss.requires_grad:
+                    loss.backward()
+                return loss
 
-        with torch.no_grad():
-            optimized_predictions = self.model(torch.cat(tensors, dim=-1))
+            self.optimizer_LBFGS.step(closure)
 
-        optimized_predictions = optimized_predictions.cpu().numpy()
+            with torch.no_grad():
+                test_prediction_data = self.model(torch.cat(tensors, dim=-1))
 
-        return optimized_predictions
+        test_prediction_data = test_prediction_data.cpu().numpy()
+
+        return test_prediction_data
 
 if __name__ == "__main__":
     
