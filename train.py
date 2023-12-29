@@ -248,7 +248,7 @@ if __name__ == "__main__":
         file_suffix = str(i).zfill(5)
         
         # Dictionary to store the loaded data
-        test_input_data = {}
+        residual_input = {}
 
         # Iterate over the mapping and load each file
         for key, value in inputs.items():
