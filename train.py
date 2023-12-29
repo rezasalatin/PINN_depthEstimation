@@ -222,25 +222,21 @@ if __name__ == "__main__":
 
     inputs = config['data_residual']['inputs']
     outputs = config['data_residual']['outputs']
+    folder = config['numerical_model']['dir']
+    file_no = config['numerical_model']['number_of_files']
     residual_snaps = config['data_residual']['numerical_model_snapshots']
 
-    folder = config['numerical_model']['dir']
-    interval_x = config['numerical_model']['interval_x']
-    interval_y = config['numerical_model']['interval_y']
-    dx = config['numerical_model']['dx']
-    dy = config['numerical_model']['dy']
+    interval_x, interval_y = config['numerical_model']['interval_x'], config['numerical_model']['interval_y']
+    dx, dy = config['numerical_model']['dx'], config['numerical_model']['dy']
+    x_min, x_max = config['numerical_model']['x_min'], config['numerical_model']['x_max']
+    y_min, y_max = config['numerical_model']['y_min'], config['numerical_model']['y_max']
     dt = config['numerical_model']['dt']
-    x_min = config['numerical_model']['x_min']
-    x_max = config['numerical_model']['x_max']
-    y_min = config['numerical_model']['y_min']
-    y_max = config['numerical_model']['y_max']
 
-    file_no = config['numerical_model']['number_of_files']
 
     residual_input_train = np.empty((0, len(inputs)))
 
-    x = np.arange(x_min, x_max+1, dx).astype(np.float64)
-    y = np.arange(y_min, y_max+1, dy).astype(np.float64)
+    x = np.linspace(x_min, x_max, num=config['numerical_model']['nx']).astype(np.float64)
+    y = np.linspace(y_min, y_max, num=config['numerical_model']['ny']).astype(np.float64)
     X_test, Y_test = np.meshgrid(x, y)
 
     for i in residual_snaps:
