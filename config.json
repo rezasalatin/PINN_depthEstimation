@@ -62,8 +62,8 @@
         "x_max": 500,
         "y_min": 0,
         "y_max": 1000,
-        "interval_x": 10,
-        "interval_y": 10,
+        "interval_x": 5,
+        "interval_y": 5,
         "dt": 1.0,
         "number_of_files": 501
     },
