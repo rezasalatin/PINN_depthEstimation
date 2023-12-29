@@ -222,6 +222,7 @@ if __name__ == "__main__":
 
     inputs = config['data_residual']['inputs']
     outputs = config['data_residual']['outputs']
+
     folder = config['numerical_model']['dir']
     file_no = config['numerical_model']['number_of_files']
     residual_snaps = config['data_residual']['numerical_model_snapshots']
@@ -255,7 +256,7 @@ if __name__ == "__main__":
             elif key == 'y':
                 data = Y_test
             elif key == 't':
-                data = np.full(X_test.shape, (i-1)*dt, dtype=np.float64)
+                data = np.full(X_test.shape, i*dt, dtype=np.float64)
             else:
                 fname = file_name if key == 'h' else f"{file_name}_{file_suffix}"    
                 file_path = os.path.join(folder, fname)
