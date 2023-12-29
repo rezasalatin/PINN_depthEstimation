@@ -5,7 +5,8 @@ import os
 import sys
 from physics import Boussinesq_simple as physics_loss_calculator
 
-class PINN:
+# the physics-guided neural network
+class pinn:
     
     def __init__(self, model_path, config):
         self.config = config
@@ -54,9 +55,6 @@ class PINN:
             requires_grad = "true" in var_info["requires_grad"]
             setattr(self, var_name, torch.tensor(test_input_data[:, i:i+1], requires_grad=requires_grad).float().to(self.device))  
         test_input_data = [getattr(self, var_name) for i, var_name in enumerate(self.test_input_vars)]
-        
-        #test_input_data = np.column_stack([test_input_data[key].flatten() for key in self.test_input_vars])
-        #test_input_data = torch.tensor(test_input_data).float().to(self.device)
 
         initial_predictions = self.model(test_input_data)
 
@@ -97,7 +95,7 @@ if __name__ == "__main__":
 
     file_no = config['numerical_model']['number_of_files']
 
-    tester = PINN(model_path, config)
+    tester = pinn(model_path, config)
 
     x = np.linspace(x_min, x_max, num=config['numerical_model']['nx']).astype(np.float64)
     y = np.linspace(y_min, y_max, num=config['numerical_model']['ny']).astype(np.float64)
