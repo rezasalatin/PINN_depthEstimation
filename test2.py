@@ -2,9 +2,11 @@ import torch
 import numpy as np
 import json
 import os
+import sys
 from physics import Boussinesq_simple as physics_loss_calculator
 
 class PINN:
+    
     def __init__(self, model_path, config):
         self.config = config
         self.device = self.set_device()
@@ -31,7 +33,7 @@ class PINN:
             return model
         except Exception as e:
             print(f"Error loading model: {e}")
-            exit(1)
+            sys.exit(1)
 
     def init_optimizers(self):
         self.optimizer_LBFGS = torch.optim.LBFGS(
@@ -46,20 +48,24 @@ class PINN:
         )
 
     def test(self, test_input_data):
-        test_input_data = np.column_stack([test_input_data[key].flatten() for key in self.test_input_vars])
-        test_input_data = torch.tensor(test_input_data).float().to(self.device)
+        
+        # temporal and spatial information for physics part
+        for i, (var_name, var_info) in enumerate(self.test_input_vars.items()):
+            requires_grad = "true" in var_info["requires_grad"]
+            setattr(self, var_name, torch.tensor(test_input_data[:, i:i+1], requires_grad=requires_grad).float().to(self.device))  
+        test_input_data = [getattr(self, var_name) for i, var_name in enumerate(self.test_input_vars)]
+        
+        #test_input_data = np.column_stack([test_input_data[key].flatten() for key in self.test_input_vars])
+        #test_input_data = torch.tensor(test_input_data).float().to(self.device)
 
         initial_predictions = self.model(test_input_data)
-
-        for i, var_name in enumerate(self.test_input_vars):
-            setattr(self, var_name, test_input_data[:, i:i+1])
 
         for i, var_name in enumerate(self.test_output_vars):
             setattr(self, var_name, initial_predictions[:, i:i+1])
 
         def closure():
             self.optimizer_LBFGS.zero_grad()
-            loss = physics_loss_calculator(self.t, self.x, self.y, self.h, self.z, self.u, self.v, initial_predictions)
+            loss = physics_loss_calculator(self.t, self.x, self.y, self.h, self.z, self.u, self.v)
             if loss.requires_grad:
                 loss.backward()
             return loss
@@ -80,7 +86,7 @@ if __name__ == "__main__":
             config = json.load(f)
     except Exception as e:
         print(f"Error reading config file: {e}")
-        exit(1)
+        sys.exit(1)
 
     model_path = os.path.join(config['test']['model_path'], 'model.pth')
 
@@ -98,12 +104,16 @@ if __name__ == "__main__":
     X_test, Y_test = np.meshgrid(x, y)
 
     for i in range(file_no):
+        
+        file_suffix = str(i).zfill(5)
+        
         test_input_data = {'x': X_test, 'y': Y_test, 't': np.full(X_test.shape, i*dt)}
 
         for key, value in config['data_residual']['inputs'].items():
             if key not in ['x', 'y', 't']:
                 file_name = value["file"].format(i)
-                file_path = os.path.join(folder, file_name)
+                fname = f"{file_name}_{file_suffix}" 
+                file_path = os.path.join(folder, fname)
                 try:
                     data = np.loadtxt(file_path)
                     test_input_data[key] = data

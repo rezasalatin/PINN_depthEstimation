@@ -239,8 +239,8 @@ if __name__ == "__main__":
 
     residual_input_train = np.empty((0, len(inputs)))
 
-    x = np.arange(x_min, x_max+1).astype(np.float64)
-    y = np.arange(y_min, y_max+1).astype(np.float64)
+    x = np.arange(x_min, x_max+1, dx).astype(np.float64)
+    y = np.arange(y_min, y_max+1, dy).astype(np.float64)
     X_test, Y_test = np.meshgrid(x, y)
 
     for i in residual_snaps:
@@ -265,8 +265,8 @@ if __name__ == "__main__":
                 file_path = os.path.join(folder, fname)
                 data = np.loadtxt(file_path)
 
-            residual_input[key] = data
-    
+            residual_input[key] = data[::interval_x, ::interval_y]
+            
         residual_input = np.column_stack([residual_input[key].flatten() for key in inputs])
        
         # Concatenate the new array to the existing residual_in_train

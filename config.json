@@ -49,7 +49,7 @@
             "u": "u",
             "v": "v"
         },
-        "numerical_model_snapshots": [0, 1, 2]
+        "numerical_model_snapshots": [200, 211, 233, 250, 267, 277, 289, 300]
     },
     
     "numerical_model": {
@@ -64,7 +64,7 @@
         "y_max": 1001,
         "interval_x": 10,
         "interval_y": 10,
-        "dt": 0.1,
+        "dt": 1.0,
         "number_of_files": 501
     },
     
@@ -76,6 +76,6 @@
     
     "test": {
         "dir": "../data/output_reg_pinn",
-        "model_path": "../log/log_20231227_1232"
+        "model_path": "../log/log_20231228_1921"
     }
 }
