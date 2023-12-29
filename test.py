@@ -49,14 +49,21 @@ class pinn:
         )
 
     def test(self, test_input_data):
+        test_input_data = torch.tensor(test_input_data).float().to(self.device)
         
-        # temporal and spatial information for physics part
-        for i, (var_name, var_info) in enumerate(self.test_input_vars.items()):
-            requires_grad = "true" in var_info["requires_grad"]
-            setattr(self, var_name, torch.tensor(test_input_data[:, i:i+1], requires_grad=requires_grad).float().to(self.device))  
-        test_input_data = [getattr(self, var_name) for i, var_name in enumerate(self.test_input_vars)]
+        # Splitting the concatenated data into individual tensors
+        tensors = []
+        start = 0
+        for var_name, var_info in self.test_input_vars.items():
+            size = var_info['size']  # Assuming 'size' key holds the size of each variable
+            tensor = test_input_data[:, start:start+size]
+            if "true" in var_info["requires_grad"]:
+                tensor.requires_grad_(True)
+            setattr(self, var_name, tensor)
+            tensors.append(tensor)
+            start += size
 
-        initial_predictions = self.model(test_input_data)
+        initial_predictions = self.model(torch.cat(tensors, dim=-1))
 
         for i, var_name in enumerate(self.test_output_vars):
             setattr(self, var_name, initial_predictions[:, i:i+1])
@@ -71,7 +78,7 @@ class pinn:
         self.optimizer_LBFGS.step(closure)
 
         with torch.no_grad():
-            optimized_predictions = self.model(test_input_data)
+            optimized_predictions = self.model(torch.cat(tensors, dim=-1))
 
         optimized_predictions = optimized_predictions.cpu().numpy()
 

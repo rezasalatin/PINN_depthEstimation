@@ -121,7 +121,7 @@ class pinn():
             true = getattr(self, f'fidelity_true_{var_name}')
             fidelity_loss += torch.mean((true - pred)**2)
         
-       # Dynamic residual inputs
+        # Dynamic residual inputs
         inputs = [getattr(self, f'residual_input_{var_name}') for i, var_name in enumerate(self.residual_input_vars)]
         for var_name in self.residual_input_vars:
             setattr(self, var_name, getattr(self, f'residual_input_{var_name}'))
