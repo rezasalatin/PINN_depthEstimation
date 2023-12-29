@@ -220,11 +220,11 @@ if __name__ == "__main__":
     ########### Data for Residual ###########
     #########################################
 
-    folder = config['data_residual']['dir']
     inputs = config['data_residual']['inputs']
     outputs = config['data_residual']['outputs']
-    
     residual_snaps = config['data_residual']['numerical_model_snapshots']
+
+    folder = config['numerical_model']['dir']
     interval_x = config['numerical_model']['interval_x']
     interval_y = config['numerical_model']['interval_y']
     dx = config['numerical_model']['dx']
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     X_test, Y_test = np.meshgrid(x, y)
 
     for i in residual_snaps:
-        
+
         file_suffix = str(i).zfill(5)
         
         # Dictionary to store the loaded data
