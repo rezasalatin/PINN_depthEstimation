@@ -73,7 +73,7 @@ class pinn:
             tensor = test_prediction_data[:, i:i+1]
             setattr(self, var_name, tensor)
 
-            # Clone the tensor to a new variable with the prefix 'plot_'
+            # Clone the tensor to a new variable with the prefix
             plot_tensor = tensor.clone().detach()  # Clone and detach the tensor
             setattr(self, f'plot_pred_{var_name}', plot_tensor)
 
