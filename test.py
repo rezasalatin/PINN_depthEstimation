@@ -4,6 +4,7 @@ import json
 import os
 import sys
 from physics import Boussinesq_simple as physics_loss_calculator
+import plots
 
 # the physics-guided neural network
 class pinn:
@@ -58,16 +59,28 @@ class pinn:
                 tensor = tensor.requires_grad_()
             tensor = tensor.float().to(self.device)
             setattr(self, var_name, tensor)
+
+            # Clone the tensor to a new variable with the prefix 'plot_'
+            plot_tensor = tensor.clone().detach()  # Clone and detach the tensor
+            setattr(self, f'plot_input_{var_name}', plot_tensor)
+
             
         test_input_data = [getattr(self, var_name) for i, var_name in enumerate(self.test_input_vars)]
 
         test_prediction_data = self.model(torch.cat(test_input_data, dim=-1))
 
+        for i, var_name in enumerate(self.test_output_vars):
+            tensor = test_prediction_data[:, i:i+1]
+            setattr(self, var_name, tensor)
+
+            # Clone the tensor to a new variable with the prefix 'plot_'
+            plot_tensor = tensor.clone().detach()  # Clone and detach the tensor
+            setattr(self, f'plot_pred_{var_name}', plot_tensor)
+
+
+
         # Check if optimization is to be performed
         if self.config.get('perform_optimization', False):
-
-            for i, var_name in enumerate(self.test_output_vars):
-                setattr(self, var_name, test_prediction_data[:, i:i+1])
 
             def closure():
                 self.optimizer_LBFGS.zero_grad()
@@ -82,8 +95,11 @@ class pinn:
                 test_prediction_data = self.model(torch.cat(test_input_data, dim=-1))
 
         test_prediction_data = test_prediction_data.detach().cpu().numpy()
-        
-        print(f'Test data {file_no}')
+
+        # plots
+        plot_quiver(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_input_u, self.plot_input_v, self.plot_pred_u, self.plot_pred_v, self.config)
+
+
 
         return test_prediction_data
 
@@ -138,3 +154,6 @@ if __name__ == "__main__":
         test_input_data = np.column_stack([test_input_data[key].flatten() for key in config['data_residual']['inputs']])
 
         test_outputs = tester.test(test_input_data, file_no)
+        print(f'Done: Prediction for file: {file_no}')
+
+

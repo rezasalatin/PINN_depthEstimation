@@ -69,9 +69,10 @@
     },
     
     "plot": {
-        "figure_size": 14,
+        "font_size": 14,
         "x_limits": [150, 450],
-        "y_limits": [0, 1000]
+        "y_limits": [0, 1000],
+        "dir": "../plot/plot_reg",
     },
     
     "test": {
