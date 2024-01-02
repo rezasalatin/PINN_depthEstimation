@@ -107,7 +107,7 @@ def plot_cmap_2column(t, x, y, variable_true, variable_pred, config, var_name):
     plt.close()
 
 ###########################################################
-def plot_cmap_2column(log_file_path):
+def plot_log(log_file_path):
     
     # Initialize lists to store the extracted data
     iterations = []
