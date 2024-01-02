@@ -105,3 +105,32 @@ def plot_cmap_2column(t, x, y, variable_true, variable_pred, config, var_name):
     os.makedirs(plot_folder, exist_ok=True)
     plt.savefig(os.path.join(plot_folder, f'{var_name}_{file_suffix}sec.png'), dpi=300, bbox_inches='tight')
     plt.close()
+
+###########################################################
+def plot_cmap_2column(log_file_path):
+    
+    # Initialize lists to store the extracted data
+    iterations = []
+    fidelity_losses = []
+    residual_losses = []
+    total_losses = []
+
+    # Read the log file
+    with open(log_file_path, 'r') as file:
+        for line in file:
+            data = line.split(', ')
+            iterations.append(int(data[0]))
+            fidelity_losses.append(float(data[1]))
+            residual_losses.append(float(data[2]))
+            total_losses.append(float(data[3]))
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    plt.plot(iterations, fidelity_losses, label='Fidelity Loss')
+    plt.plot(iterations, residual_losses, label='Residual Loss')
+    plt.plot(iterations, total_losses, label='Total Loss')
+    plt.xlabel('Iteration')
+    plt.ylabel('Loss')
+    plt.title('Loss Values Over Iterations')
+    plt.legend()
+    plt.show()
