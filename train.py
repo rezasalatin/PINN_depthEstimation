@@ -156,7 +156,7 @@ class pinn():
         
         if self.iter % 100 == 0:
             # Print the log values
-            print(f'Epoch {self.iter}, fidelity_loss: {fidelity_loss.item():.5e}, residual_loss: {residual_loss.item():.5e}, Total Loss: {loss.item():.5e}')
+            print(f'Epoch {self.iter}, Fidelity Loss: {fidelity_loss.item():.5e}, Residual Loss: {residual_loss.item():.5e}, Total Loss: {loss.item():.5e}')
 
         return loss
 

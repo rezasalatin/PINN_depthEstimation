@@ -1,6 +1,6 @@
 {
     "layers": {
-        "input_features": 4,
+        "input_features": 5,
         "hidden_layers": 20,
         "hidden_width": 20,
         "output_features": 4
@@ -30,7 +30,7 @@
     
     "data_fidelity": {
         "dir": "../data/beach2d_reg.csv",
-        "inputs": ["t", "x", "y", "z"],
+        "inputs": ["t", "x", "y", "u", "v"],
         "outputs": ["h", "z", "u", "v"],
         "training_points": 9600
     },
@@ -40,7 +40,8 @@
             "t": {"file": "t", "requires_grad": ["true"]},
             "x": {"file": "X", "requires_grad": ["true"]},
             "y": {"file": "Y", "requires_grad": ["true"]},
-            "z": {"file": "eta", "requires_grad": ["false"]}
+            "u": {"file": "u", "requires_grad": ["false"]},
+            "v": {"file": "v", "requires_grad": ["false"]}
         },
         "outputs": {
             "h": {"file": "dep.out"},
