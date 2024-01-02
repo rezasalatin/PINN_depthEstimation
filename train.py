@@ -203,10 +203,10 @@ if __name__ == "__main__":
         if key in outputs:
             fidelity_true[key] = data[key].to_numpy()  # Convert to NumPy array if needed
 
-    # Normalize input data
-    fidelity_input_min_max = op.get_min_max(fidelity_input)
+    # min and max to normalize fidelity input data
+    input_min_max = op.get_min_max(fidelity_input, config)
     for key in fidelity_input:
-        fidelity_input[key] = op.normalize(fidelity_input[key], fidelity_input_min_max[key][0], fidelity_input_min_max[key][1])
+        fidelity_input[key] = op.normalize(fidelity_input[key], input_min_max[key][0], input_min_max[key][1])
 
     # Single NumPy array from dictionaries
     fidelity_input = np.column_stack([fidelity_input[key] for key in inputs])
@@ -226,7 +226,6 @@ if __name__ == "__main__":
     outputs = config['data_residual']['outputs']
 
     folder = config['numerical_model']['dir']
-    file_no = config['numerical_model']['number_of_files']
     residual_snaps = config['data_residual']['numerical_model_snapshots']
 
     interval_x, interval_y = config['numerical_model']['interval_x'], config['numerical_model']['interval_y']
@@ -234,7 +233,6 @@ if __name__ == "__main__":
     x_min, x_max = config['numerical_model']['x_min'], config['numerical_model']['x_max']
     y_min, y_max = config['numerical_model']['y_min'], config['numerical_model']['y_max']
     dt = config['numerical_model']['dt']
-
 
     residual_input_train = np.empty((0, len(inputs)))
 
@@ -253,18 +251,22 @@ if __name__ == "__main__":
         for key, value in inputs.items():
             
             file_name = value["file"]
-            if key == 'x':
+            if key == 't':
+                data = np.full(X_test.shape, i*dt, dtype=np.float64)
+            elif key == 'x':
                 data = X_test
             elif key == 'y':
                 data = Y_test
-            elif key == 't':
-                data = np.full(X_test.shape, i*dt, dtype=np.float64)
             else:
                 fname = file_name if key == 'h' else f"{file_name}_{file_suffix}"    
                 file_path = os.path.join(folder, fname)
                 data = np.loadtxt(file_path)
+                data = data.round(3)
 
             residual_input[key] = data[::interval_x, ::interval_y]
+            
+            # Normalize residual input data
+            residual_input[key] = op.normalize(residual_input[key], input_min_max[key][0], input_min_max[key][1])
             
         residual_input = np.column_stack([residual_input[key].flatten() for key in inputs])
        
