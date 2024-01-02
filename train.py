@@ -8,6 +8,7 @@ w/ Pytorch
 
 import torch
 import numpy as np
+import pandas as pd
 import time
 import datetime
 import os
@@ -185,21 +186,22 @@ if __name__ == "__main__":
     ########### Data for Fidelity ###########
     #########################################
     
-    folder = config['data_fidelity']['dir']            # Data directory
-    inputs = config['data_fidelity']['inputs']      # List of input variable names
-    outputs = config['data_fidelity']['outputs']    # List of exact/output variable names
+    folder = config['data_fidelity']['dir']             # Data directory
+    inputs = config['data_fidelity']['inputs']          # List of input variable names
+    outputs = config['data_fidelity']['outputs']        # List of exact/output variable names
 
     # Create dictionaries for input and output data columns
     fidelity_input, fidelity_true = {}, {}
     # Extract all data from csv file.
-    data = np.genfromtxt(folder, delimiter=' ', dtype=None, names=True, encoding=None)
+    data = pd.read_csv(folder, delim_whitespace=True)
+    data = data.round(3)
 
     # Iterate over the columns and assign them to the respective dictionaries
-    for key in data.dtype.names:
+    for key in data.columns:
         if key in inputs:
-            fidelity_input[key] = data[key]
+            fidelity_input[key] = data[key].to_numpy()  # Convert to NumPy array if needed
         if key in outputs:
-            fidelity_true[key] = data[key]
+            fidelity_true[key] = data[key].to_numpy()  # Convert to NumPy array if needed
 
     # Normalize input data
     fidelity_input_min_max = op.get_min_max(fidelity_input)

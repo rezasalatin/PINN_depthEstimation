@@ -18,6 +18,9 @@ class pinn:
 
         self.test_input_vars = config['data_residual']['inputs']
         self.test_output_vars = config['data_residual']['outputs']
+        
+        self.nx = config['numerical_model']['nx']
+        self.ny = config['numerical_model']['ny']
 
     def set_device(self):
         if torch.cuda.is_available():
@@ -49,7 +52,7 @@ class pinn:
             line_search_fn=self.config['lbfgs_optimizer']['line_search_fn']
         )
 
-    def test(self, test_input_data, file_no):
+    def test(self, test_input_data, test_true_data, file_no):
         test_input_data = torch.tensor(test_input_data).float().to(self.device)
         
         # temporal and spatial information for physics part
@@ -62,6 +65,7 @@ class pinn:
 
             # Clone the tensor to a new variable with the prefix 'plot_'
             plot_tensor = tensor.clone().detach()  # Clone and detach the tensor
+            plot_tensor = plot_tensor.reshape(self.ny, self.nx)
             setattr(self, f'plot_input_{var_name}', plot_tensor)
 
             
@@ -72,12 +76,14 @@ class pinn:
         for i, var_name in enumerate(self.test_output_vars):
             tensor = test_prediction_data[:, i:i+1]
             setattr(self, var_name, tensor)
-
             # Clone the tensor to a new variable with the prefix
             plot_tensor = tensor.clone().detach()  # Clone and detach the tensor
+            plot_tensor = plot_tensor.reshape(self.ny, self.nx)
             setattr(self, f'plot_pred_{var_name}', plot_tensor)
-
-
+            
+            # Convert the NumPy array to a PyTorch tensor, then clone and detach
+            tensor = torch.from_numpy(test_true_data[var_name]).clone().detach()
+            setattr(self, f'plot_true_{var_name}', tensor)
 
         # Check if optimization is to be performed
         if self.config.get('perform_optimization', False):
@@ -97,9 +103,13 @@ class pinn:
         test_prediction_data = test_prediction_data.detach().cpu().numpy()
 
         # plots
-        plot_quiver(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_input_u, self.plot_input_v, self.plot_pred_u, self.plot_pred_v, self.config)
-
-
+        plots.plot_quiver(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_input_u, self.plot_input_v, self.plot_pred_u, self.plot_pred_v, self.config)
+        
+        #plots.plot_cmap(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_pred_z, self.config, 'eta')
+        #plots.plot_cmap(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_pred_h, self.config, 'depth')
+        
+        plots.plot_cmap_2column(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_z, self.plot_pred_z, self.config, 'eta')
+        plots.plot_cmap_2column(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_h, self.plot_pred_h, self.config, 'depth')
 
         return test_prediction_data
 
@@ -127,12 +137,13 @@ if __name__ == "__main__":
     y = np.linspace(y_min, y_max, num=config['numerical_model']['ny']).astype(np.float64)
     X_test, Y_test = np.meshgrid(x, y)
 
-    for file_no in range(num_files):
+    for file_no in range(200, num_files):
         
         file_suffix = str(file_no).zfill(5)
 
         # Dictionary to store the loaded data
         test_input_data = {}
+        test_true_data = {}
 
         # Iterate over the mapping and load each file
         for key, value in config['data_residual']['inputs'].items():
@@ -151,9 +162,19 @@ if __name__ == "__main__":
                 
             test_input_data[key] = data
             
+        # Iterate over the mapping and load each file
+        for key, value in config['data_residual']['outputs'].items():
+            
+            file_name = value["file"]
+            fname = file_name if key == 'h' else f"{file_name}_{file_suffix}"    
+            file_path = os.path.join(folder, fname)
+            data = np.loadtxt(file_path)
+                
+            test_true_data[key] = data
+            
         test_input_data = np.column_stack([test_input_data[key].flatten() for key in config['data_residual']['inputs']])
 
-        test_outputs = tester.test(test_input_data, file_no)
+        test_outputs = tester.test(test_input_data, test_true_data, file_no)
         print(f'Done: Prediction for file: {file_no}')
 
 

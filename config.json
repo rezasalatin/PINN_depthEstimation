@@ -44,10 +44,10 @@
             "v": {"file": "v", "requires_grad": ["false"]}
         },
         "outputs": {
-            "h": "dep.out",
-            "z": "eta",
-            "u": "u",
-            "v": "v"
+            "h": {"file": "dep.out"},
+            "z": {"file": "eta"},
+            "u": {"file": "u"},
+            "v": {"file": "v"}
         },
         "numerical_model_snapshots": [200, 211, 233, 250, 267, 277, 289, 300]
     },
@@ -72,11 +72,11 @@
         "font_size": 14,
         "x_limits": [150, 450],
         "y_limits": [0, 1000],
-        "dir": "../plot/plot_reg",
+        "dir": "../plot/plot_reg1"
     },
     
     "test": {
         "dir": "../data/output_reg_pinn",
-        "model_path": "../log/log_20231228_1921"
+        "model_path": "../log/log_20240101_1242"
     }
 }
