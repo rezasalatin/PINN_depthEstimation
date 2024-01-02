@@ -107,10 +107,8 @@ def plot_cmap_2column(t, x, y, variable_true, variable_pred, config, var_name):
     plt.close()
 
 ###########################################################
-def plot_log(log_file_path, config):
+def plot_log(log_path, plot_path):
     
-    plot_folder = config['plot']['dir']
-
     # Initialize lists to store the extracted data
     iterations = []
     fidelity_losses = []
@@ -118,7 +116,7 @@ def plot_log(log_file_path, config):
     total_losses = []
 
     # Read the log file
-    with open(log_file_path, 'r') as file:
+    with open(os.path.join(log_path, 'log.txt'), 'r') as file:
         next(file)  # Skip the header line
         for line in file:
             data = line.split(', ')
@@ -134,10 +132,13 @@ def plot_log(log_file_path, config):
     plt.plot(iterations, total_losses, label='Total Loss')
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
+    plt.xlim([0, 50000])
+    plt.ylim([0.001, 10])
     plt.title('Loss Values Over Iterations')
+    plt.yscale('log')
     plt.legend()
     
     # Save the plot with file number in the filename
-    os.makedirs(plot_folder, exist_ok=True)
-    plt.savefig(os.path.join(plot_folder, 'log.png'), dpi=300, bbox_inches='tight')
+    os.makedirs(plot_path, exist_ok=True)
+    plt.savefig(os.path.join(plot_path, 'log.png'), dpi=300, bbox_inches='tight')
     plt.close()

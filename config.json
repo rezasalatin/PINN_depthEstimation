@@ -7,7 +7,7 @@
     },
     
     "adam_optimizer": {
-        "max_it": 50000,
+        "max_it": 0,
         "learning_rate": 1e-4,
         "scheduler_step_size": 10000,
         "scheduler_gamma": 0.8
@@ -76,6 +76,6 @@
     
     "test": {
         "dir": "../data/output_reg_pinn",
-        "model_path": "../log/log_20240102_1349"
+        "model_path": "../log/log_20240102_1641"
     }
 }
