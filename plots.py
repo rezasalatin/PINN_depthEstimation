@@ -117,6 +117,7 @@ def plot_log(log_file_path):
 
     # Read the log file
     with open(log_file_path, 'r') as file:
+        next(file)  # Skip the header line
         for line in file:
             data = line.split(', ')
             iterations.append(int(data[0]))
