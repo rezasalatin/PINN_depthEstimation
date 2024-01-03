@@ -205,8 +205,8 @@ if __name__ == "__main__":
 
     # min and max to normalize fidelity input data
     input_min_max = op.get_min_max(fidelity_input, config)
-    #for key in fidelity_input:
-    #    fidelity_input[key] = op.normalize(fidelity_input[key], input_min_max[key][0], input_min_max[key][1])
+    for key in fidelity_input:
+        fidelity_input[key] = op.normalize(fidelity_input[key], input_min_max[key][0], input_min_max[key][1])
 
     # Single NumPy array from dictionaries
     fidelity_input = np.column_stack([fidelity_input[key] for key in inputs])
@@ -266,7 +266,7 @@ if __name__ == "__main__":
             residual_input[key] = data[::interval_x, ::interval_y]
             
             # Normalize residual input data
-            #residual_input[key] = op.normalize(residual_input[key], input_min_max[key][0], input_min_max[key][1])
+            residual_input[key] = op.normalize(residual_input[key], input_min_max[key][0], input_min_max[key][1])
             
         residual_input = np.column_stack([residual_input[key].flatten() for key in inputs])
        
