@@ -45,13 +45,14 @@ def plot_cmap(t, x, y, variable, config, var_name):
     font_size = config['plot']['font_size']
     x_limits = config['plot']['x_limits']
     y_limits = config['plot']['y_limits']
+    c_limits = config['plot']['c_limits']
     plot_folder = config['plot']['dir']
 
     file_suffix = str(t).zfill(4)
     
     fig, ax = plt.subplots(figsize=(6, 6))  # Adjust figure size as needed
     
-    cmap1 = ax.pcolor(axis_x, axis_y, axis_z, shading='auto')
+    cmap1 = ax.pcolor(axis_x, axis_y, axis_z, shading='auto', vmin=c_limits[0], vmax=c_limits[1])
     cbar1 = fig.colorbar(cmap1, ax=ax)
     cbar1.set_label(f'{var_name} (m)')
     ax.set_xlabel('X (m)', fontsize=font_size)
