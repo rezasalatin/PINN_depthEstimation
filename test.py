@@ -103,13 +103,19 @@ class pinn:
         test_prediction_data = test_prediction_data.detach().cpu().numpy()
 
         # plots
-        plots.plot_quiver(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_input_u, self.plot_input_v, self.plot_pred_u, self.plot_pred_v, self.config)
+        # plots.plot_quiver(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_input_u, self.plot_input_v, self.plot_pred_u, self.plot_pred_v, self.config)
         
         #plots.plot_cmap(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_pred_z, self.config, 'eta')
-        #plots.plot_cmap(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_pred_h, self.config, 'depth')
         
+        # plot prediction of water depth
+        plots.plot_cmap(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_pred_h, self.config, 'depth')
+        
+        # plot comparison of eta (true vs. prediction)
         plots.plot_cmap_2column(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_z, self.plot_pred_z, self.config, 'eta')
-        plots.plot_cmap_2column(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_h, self.plot_pred_h, self.config, 'depth')
+        
+        # plot comparison of water depth (true vs. prediction)
+        #plots.plot_cmap_2column(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_h, self.plot_pred_h, self.config, 'depth')
+
 
         return test_prediction_data
 
@@ -173,7 +179,7 @@ if __name__ == "__main__":
             test_true_data[key] = data
             
         test_input_data = np.column_stack([test_input_data[key].flatten() for key in config['data_residual']['inputs']])
-
+        
         test_outputs = tester.test(test_input_data, test_true_data, file_no)
         print(f'Done: Prediction for file: {file_no}')
 

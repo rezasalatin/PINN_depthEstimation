@@ -15,7 +15,7 @@ import os
 import json
 from physics import Boussinesq_simple as physics_loss_calculator
 import operations as op
-from dnn import DNN
+from dnn import DNN_archive as DNN
 
 np.random.seed(1234)
 

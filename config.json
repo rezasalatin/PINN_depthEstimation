@@ -71,11 +71,11 @@
         "font_size": 14,
         "x_limits": [150, 450],
         "y_limits": [0, 1000],
-        "dir": "../plot/plot_reg1"
+        "dir": "../plot/log_20240102_2014"
     },
     
     "test": {
         "dir": "../data/output_reg_pinn",
-        "model_path": "../log/log_20240102_1641"
+        "model_path": "../log/log_20240102_2014"
     }
 }
