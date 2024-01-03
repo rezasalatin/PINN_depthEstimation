@@ -15,7 +15,7 @@ import os
 import json
 from physics import Boussinesq_simple as physics_loss_calculator
 import operations as op
-from dnn import DNN as DNN
+from dnn import DNN
 
 np.random.seed(1234)
 
@@ -35,7 +35,7 @@ with open('config.json', 'r') as f:
 
 # Get current date and time
 now = datetime.datetime.now()
-folder_name = now.strftime("log_%Y%m%d_%H%M")
+folder_name = now.strftime("%Y%m%d_%H%M")
 # Create a directory with the folder_name
 log_dir = f"../log/{folder_name}"
 os.makedirs(log_dir, exist_ok=True)

@@ -75,7 +75,7 @@
     },
     
     "test": {
-        "dir": "../data/output_reg_pinn",
+        "dir": "../data/output_irr_pinn",
         "model_path": "../log/log_20240102_2156"
     }
 }
