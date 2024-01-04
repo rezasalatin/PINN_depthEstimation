@@ -5,6 +5,7 @@ import os
 import sys
 from physics import Boussinesq_simple as physics_loss_calculator
 import plots
+import operations as op
 
 # the physics-guided neural network
 class pinn:
@@ -79,11 +80,11 @@ class pinn:
             # Clone the tensor to a new variable with the prefix
             plot_tensor = tensor.clone().detach()  # Clone and detach the tensor
             plot_tensor = plot_tensor.reshape(self.ny, self.nx)
-            setattr(self, f'plot_pred_{var_name}', plot_tensor)
+            setattr(self, f'plot_pred_{var_name}', plot_tensor.cpu().numpy())
             
             # Convert the NumPy array to a PyTorch tensor, then clone and detach
             tensor = torch.from_numpy(test_true_data[var_name]).clone().detach()
-            setattr(self, f'plot_true_{var_name}', tensor)
+            setattr(self, f'plot_true_{var_name}', tensor.cpu().numpy())
 
         # Check if optimization is to be performed
         if self.config.get('perform_optimization', False):
@@ -103,19 +104,27 @@ class pinn:
         test_prediction_data = test_prediction_data.detach().cpu().numpy()
 
         # plots
-        # plots.plot_quiver(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_input_u, self.plot_input_v, self.plot_pred_u, self.plot_pred_v, self.config)
+        x_min, x_max = config['numerical_model']['x_min'], config['numerical_model']['x_max']
+        y_min, y_max = config['numerical_model']['y_min'], config['numerical_model']['y_max'],
+        x = np.linspace(x_min, x_max, num=config['numerical_model']['nx']).astype(np.float64)
+        y = np.linspace(y_min, y_max, num=config['numerical_model']['ny']).astype(np.float64)
+        x_plot, y_plot = np.meshgrid(x, y)
+        t_plot = (file_no - 1) * dt * np.ones_like(x_plot)
         
-        #plots.plot_cmap(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_pred_z, self.config, 'eta')
-        
+        # plot exact and predicted currents
+        plots.plot_quiver(t_plot, x_plot, y_plot, self.plot_true_u, self.plot_true_v, self.plot_pred_u, self.plot_pred_v, self.config)
+                
         # plot prediction of water depth
-        plots.plot_cmap(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_pred_h, self.config, 'depth')
+        plots.plot_cmap(t_plot, x_plot, y_plot, self.plot_pred_h, self.config, 'depth', -1, 9)
         
         # plot comparison of eta (true vs. prediction)
-        plots.plot_cmap_2column(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_z, self.plot_pred_z, self.config, 'eta')
+        plots.plot_cmap_2column(t_plot, x_plot, y_plot, self.plot_true_z, self.plot_pred_z, self.config, 'eta', -1, 3)
         
-        # plot comparison of water depth (true vs. prediction)
-        #plots.plot_cmap_2column(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_h, self.plot_pred_h, self.config, 'depth')
+        # plot comparison of 1d eta (cross-shore)
+        plots.plot_2lines(t_plot[251,:], x_plot[251,:], y_plot[251,:], self.plot_true_z[251,:], self.plot_pred_z[251,:], self.config, 'eta', -1, 3)
 
+        # plot comparison of 1d depth (cross-shore)
+        plots.plot_2lines(t_plot[251,:], x_plot[251,:], y_plot[251,:], -1* self.plot_true_h[251,:], -1 * self.plot_pred_h[251,:], self.config, 'depth', -9, 3)
 
         return test_prediction_data
 
@@ -128,7 +137,7 @@ if __name__ == "__main__":
         print(f"Error reading config file: {e}")
         sys.exit(1)
 
-    model_path = os.path.join(config['test']['model_path'], 'model.pth')
+    model_path = config['test']['model_path']
 
     folder = config['numerical_model']['dir']
     x_min, x_max = config['numerical_model']['x_min'], config['numerical_model']['x_max']
@@ -168,16 +177,21 @@ if __name__ == "__main__":
                 
             test_input_data[key] = data
             
+        # min and max to normalize fidelity input data
+        input_min_max = op.get_min_max(test_input_data, config)
+        for key in config['data_residual']['inputs']:
+            test_input_data[key] = op.normalize(test_input_data[key], input_min_max[key][0], input_min_max[key][1])
+            
         # Iterate over the mapping and load each file
         for key, value in config['data_residual']['outputs'].items():
             
             file_name = value["file"]
-            fname = file_name if key == 'h' else f"{file_name}_{file_suffix}"    
+            fname = file_name if key == 'h' else f"{file_name}_{file_suffix}"
             file_path = os.path.join(folder, fname)
             data = np.loadtxt(file_path)
-                
+
             test_true_data[key] = data
-            
+
         test_input_data = np.column_stack([test_input_data[key].flatten() for key in config['data_residual']['inputs']])
         
         test_outputs = tester.test(test_input_data, test_true_data, file_no)

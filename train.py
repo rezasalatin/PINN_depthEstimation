@@ -16,6 +16,7 @@ import json
 from physics import Boussinesq_simple as physics_loss_calculator
 import operations as op
 from dnn import DNN
+import plots
 
 np.random.seed(1234)
 
@@ -126,10 +127,12 @@ class pinn():
         inputs = [getattr(self, f'residual_input_{var_name}') for i, var_name in enumerate(self.residual_input_vars)]
         for var_name in self.residual_input_vars:
             setattr(self, var_name, getattr(self, f'residual_input_{var_name}'))
-            
+                        
         predictions = self.dnn(torch.cat(inputs, dim=-1))
         for i, var_name in enumerate(self.residual_output_vars):
             setattr(self, var_name, predictions[:, i:i+1])
+            
+        #self.z_pred = self.z.clone().detach().cpu().numpy()
                     
         residual_loss = physics_loss_calculator(self.t, self.x, self.y, self.h, self.z, self.u, self.v)
             
@@ -157,7 +160,22 @@ class pinn():
         if self.iter % 100 == 0:
             # Print the log values
             print(f'Epoch {self.iter}, Fidelity Loss: {fidelity_loss.item():.5e}, Residual Loss: {residual_loss.item():.5e}, Total Loss: {loss.item():.5e}')
-
+            # Save the trained model
+            torch.save(self.dnn, os.path.join(log_dir, f'model_{self.iter}.pth'))
+            
+        # plots during training when residual is only one snapshot
+        if self.iter % 1000000 == 0:
+            # plots
+            x_min, x_max = config['numerical_model']['x_min'], config['numerical_model']['x_max']
+            y_min, y_max = config['numerical_model']['y_min'], config['numerical_model']['y_max'],
+            x = np.linspace(x_min, x_max, num=config['numerical_model']['nx']).astype(np.float64)
+            y = np.linspace(y_min, y_max, num=config['numerical_model']['ny']).astype(np.float64)
+            x_plot, y_plot = np.meshgrid(x, y)
+            t_plot = np.zeros_like(x_plot)
+            self.z_pred = np.reshape(self.z_pred,x_plot.shape)
+            # plot prediction of water depth
+            plots.plot_cmap(t_plot, x_plot, y_plot, self.z_pred, config, 'eta_pred', self.iter)
+            
         return loss
 
     
