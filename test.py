@@ -112,19 +112,20 @@ class pinn:
         t_plot = (file_no - 1) * dt * np.ones_like(x_plot)
         
         # plot exact and predicted currents
-        plots.plot_quiver(t_plot, x_plot, y_plot, self.plot_true_u, self.plot_true_v, self.plot_pred_u, self.plot_pred_v, self.config)
+        #plots.plot_quiver(t_plot, x_plot, y_plot, self.plot_true_u, self.plot_true_v, self.plot_pred_u, self.plot_pred_v, self.config)
                 
         # plot prediction of water depth
-        plots.plot_cmap(t_plot, x_plot, y_plot, self.plot_pred_h, self.config, 'depth', -1, 9)
+        #plots.plot_cmap(t_plot, x_plot, y_plot, self.plot_pred_h, self.config, 'depth', -1, 9)
         
         # plot comparison of eta (true vs. prediction)
-        plots.plot_cmap_2column(t_plot, x_plot, y_plot, self.plot_true_z, self.plot_pred_z, self.config, 'eta', -1, 3)
+        #plots.plot_cmap_2column(t_plot, x_plot, y_plot, self.plot_true_z, self.plot_pred_z, self.config, 'eta', -1, 3)
         
         # plot comparison of 1d eta (cross-shore)
-        plots.plot_2lines(t_plot[251,:], x_plot[251,:], y_plot[251,:], self.plot_true_z[251,:], self.plot_pred_z[251,:], self.config, 'eta', -1, 3)
+        CS = 126
+        plots.plot_2lines(t_plot[CS,:], x_plot[CS,:], y_plot[CS,:], self.plot_true_z[CS,:], self.plot_pred_z[CS,:], self.config, 'eta', -1, 3, CS)
 
         # plot comparison of 1d depth (cross-shore)
-        plots.plot_2lines(t_plot[251,:], x_plot[251,:], y_plot[251,:], -1* self.plot_true_h[251,:], -1 * self.plot_pred_h[251,:], self.config, 'depth', -9, 3)
+        plots.plot_2lines(t_plot[CS,:], x_plot[CS,:], y_plot[CS,:], -1* self.plot_true_h[CS,:], -1 * self.plot_pred_h[CS,:], self.config, 'depth', -9, 3, CS)
 
         return test_prediction_data
 

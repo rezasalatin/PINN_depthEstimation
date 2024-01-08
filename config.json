@@ -1,7 +1,7 @@
 {
     "layers": {
         "input_features": 5,
-        "hidden_layers": 20,
+        "hidden_layers": 100,
         "hidden_width": 20,
         "output_features": 4
     },
@@ -25,7 +25,7 @@
     
     "loss": {
         "weight_fid_loss": 1,
-        "weight_res_loss": 1
+        "weight_res_loss": 100000
     },
     
     "data_fidelity": {
@@ -74,7 +74,7 @@
         "y_limits": [0, 1000],
     	"c_limits": [-1, 3],
     	"eta_limits": [-1, 3],
-        "dir": "../plot/20240103_2050"
+        "dir": "../plot/20240103_now"
     },
     
     "test": {

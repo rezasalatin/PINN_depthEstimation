@@ -107,7 +107,7 @@ def plot_cmap_2column(t, x, y, variable_true, variable_pred, config, var_name, v
     plt.close()
 
 ###########################################################
-def plot_2lines(t, x, y, variable_true, variable_pred, config, var_name, v_min, v_max):
+def plot_2lines(t, x, y, variable_true, variable_pred, config, var_name, v_min, v_max, CS):
     
     t = t[0]
     y = y[0]
@@ -135,7 +135,7 @@ def plot_2lines(t, x, y, variable_true, variable_pred, config, var_name, v_min, 
     
     # Save the plot with file number in the filename
     os.makedirs(plot_folder, exist_ok=True)
-    plt.savefig(os.path.join(plot_folder, f'{var_name}_CS_{file_suffix}sec.png'), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(plot_folder, f'{var_name}_CS{CS}_{file_suffix}sec.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
 ###########################################################
