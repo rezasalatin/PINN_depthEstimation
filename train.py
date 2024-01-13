@@ -13,7 +13,7 @@ import time
 import datetime
 import os
 import json
-from physics import Boussinesq_simple as physics_loss_calculator
+from physics import Navier_Stokes as physics_loss_calculator
 import operations as op
 from dnn import DNN
 import plots
