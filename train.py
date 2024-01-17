@@ -9,6 +9,7 @@ w/ Pytorch
 import torch
 import numpy as np
 import pandas as pd
+from scipy.io import loadmat
 import time
 import datetime
 import os
@@ -31,7 +32,7 @@ else:
     print("Device in use: CPU")
 
 # Load configuration
-with open('config.json', 'r') as f:
+with open('config_CMB.json', 'r') as f:
     config = json.load(f)
 
 # Get current date and time
@@ -65,18 +66,18 @@ class pinn():
         
         # Create individual attributes for each column in fidelity_input_train
         self.fidelity_input_vars = config['data_fidelity']['inputs']          
-        for i, var_name in enumerate(self.fidelity_input_vars):
-            setattr(self, f'fidelity_input_{var_name}', torch.tensor(fidelity_input[:, i:i+1]).float().to(device))
+        for i, key in enumerate(self.fidelity_input_vars):
+            setattr(self, f'fidelity_input_{key}', torch.tensor(fidelity_input[:, i:i+1]).float().to(device))
 
         self.fidelity_output_vars = config['data_fidelity']['outputs']   
-        for i, var_name in enumerate(self.fidelity_output_vars):
-            setattr(self, f'fidelity_true_{var_name}', torch.tensor(fidelity_true[:, i:i+1]).float().to(device))
+        for i, key in enumerate(self.fidelity_output_vars):
+            setattr(self, f'fidelity_true_{key}', torch.tensor(fidelity_true[:, i:i+1]).float().to(device))
         
         # temporal and spatial information for physics part
         self.residual_input_vars = config['data_residual']['inputs']
-        for i, (var_name, var_info) in enumerate(self.residual_input_vars.items()):
-            requires_grad = "true" in var_info["requires_grad"]
-            setattr(self, f'residual_input_{var_name}', torch.tensor(residual_input[:, i:i+1], requires_grad=requires_grad).float().to(device))
+        for i, (key, info) in enumerate(self.residual_input_vars.items()):
+            requires_grad = "true" in info["requires_grad"]
+            setattr(self, f'residual_input_{key}', torch.tensor(residual_input[:, i:i+1], requires_grad=requires_grad).float().to(device))
 
         self.residual_output_vars = config['data_residual']['outputs']
 
@@ -112,25 +113,25 @@ class pinn():
     def loss_func(self):
         
         # Dynamic fidelity inputs
-        inputs = [getattr(self, f'fidelity_input_{var_name}') for i, var_name in enumerate(self.fidelity_input_vars)]
+        inputs = [getattr(self, f'fidelity_input_{key}') for i, key in enumerate(self.fidelity_input_vars)]
         inputs = torch.cat(inputs, dim=-1)
         predictions = self.dnn(inputs)
         # fidelity_loss = fidelity_loss_calculator(predictions, true, device)
         # Dynamic fidelity outputs and loss calculation
         fidelity_loss = 0
-        for i, var_name in enumerate(self.fidelity_output_vars):
+        for i, key in enumerate(self.fidelity_output_vars):
             pred = predictions[:, i:i+1].to(device)
-            true = getattr(self, f'fidelity_true_{var_name}')
+            true = getattr(self, f'fidelity_true_{key}')
             fidelity_loss += torch.mean((true - pred)**2)
         
         # Dynamic residual inputs
-        inputs = [getattr(self, f'residual_input_{var_name}') for i, var_name in enumerate(self.residual_input_vars)]
-        for var_name in self.residual_input_vars:
-            setattr(self, var_name, getattr(self, f'residual_input_{var_name}'))
+        inputs = [getattr(self, f'residual_input_{key}') for i, key in enumerate(self.residual_input_vars)]
+        for key in self.residual_input_vars:
+            setattr(self, key, getattr(self, f'residual_input_{key}'))
                         
         predictions = self.dnn(torch.cat(inputs, dim=-1))
-        for i, var_name in enumerate(self.residual_output_vars):
-            setattr(self, var_name, predictions[:, i:i+1])
+        for i, key in enumerate(self.residual_output_vars):
+            setattr(self, key, predictions[:, i:i+1])
             
         #self.z_pred = self.z.clone().detach().cpu().numpy()
                     
@@ -163,19 +164,6 @@ class pinn():
             # Save the trained model
             torch.save(self.dnn, os.path.join(log_dir, f'model_{self.iter}.pth'))
             
-        # plots during training when residual is only one snapshot
-        if self.iter % 1000000 == 0:
-            # plots
-            x_min, x_max = config['numerical_model']['x_min'], config['numerical_model']['x_max']
-            y_min, y_max = config['numerical_model']['y_min'], config['numerical_model']['y_max'],
-            x = np.linspace(x_min, x_max, num=config['numerical_model']['nx']).astype(np.float64)
-            y = np.linspace(y_min, y_max, num=config['numerical_model']['ny']).astype(np.float64)
-            x_plot, y_plot = np.meshgrid(x, y)
-            t_plot = np.zeros_like(x_plot)
-            self.z_pred = np.reshape(self.z_pred,x_plot.shape)
-            # plot prediction of water depth
-            plots.plot_cmap(t_plot, x_plot, y_plot, self.z_pred, config, 'eta_pred', self.iter)
-            
         return loss
 
     
@@ -204,14 +192,14 @@ if __name__ == "__main__":
     ########### Data for Fidelity ###########
     #########################################
     
-    folder = config['data_fidelity']['dir']             # Data directory
+    file = config['data_fidelity']['file']             # Data directory
     inputs = config['data_fidelity']['inputs']          # List of input variable names
     outputs = config['data_fidelity']['outputs']        # List of exact/output variable names
 
     # Create dictionaries for input and output data columns
     fidelity_input, fidelity_true = {}, {}
     # Extract all data from csv file.
-    data = pd.read_csv(folder, delim_whitespace=True)
+    data = pd.read_csv(file)
     data = data.round(3)
 
     # Iterate over the columns and assign them to the respective dictionaries
@@ -223,8 +211,8 @@ if __name__ == "__main__":
 
     # min and max to normalize fidelity input data
     input_min_max = op.get_min_max(fidelity_input, config)
-    for key in fidelity_input:
-        fidelity_input[key] = op.normalize(fidelity_input[key], input_min_max[key][0], input_min_max[key][1])
+    #for key in fidelity_input:
+    #    fidelity_input[key] = op.normalize(fidelity_input[key], input_min_max[key][0], input_min_max[key][1])
 
     # Single NumPy array from dictionaries
     fidelity_input = np.column_stack([fidelity_input[key] for key in inputs])
@@ -243,53 +231,34 @@ if __name__ == "__main__":
     inputs = config['data_residual']['inputs']
     outputs = config['data_residual']['outputs']
 
-    folder = config['numerical_model']['dir']
-    residual_snaps = config['data_residual']['numerical_model_snapshots']
+    file = config['data_residual']['file']
+    residual_snaps = config['data_residual']['snapshots']
+    interval_x, interval_y = config['data_residual']['interval_x'], config['data_residual']['interval_y']
+    
+    # Dictionary to store the loaded data
+    residual_input = {}
+    residual_input_train = np.empty((0, 1))
 
-    interval_x, interval_y = config['numerical_model']['interval_x'], config['numerical_model']['interval_y']
-    dx, dy = config['numerical_model']['dx'], config['numerical_model']['dy']
-    x_min, x_max = config['numerical_model']['x_min'], config['numerical_model']['x_max']
-    y_min, y_max = config['numerical_model']['y_min'], config['numerical_model']['y_max']
-    dt = config['numerical_model']['dt']
-
-    residual_input_train = np.empty((0, len(inputs)))
-
-    x = np.linspace(x_min, x_max, num=config['numerical_model']['nx']).astype(np.float64)
-    y = np.linspace(y_min, y_max, num=config['numerical_model']['ny']).astype(np.float64)
-    X_test, Y_test = np.meshgrid(x, y)
-
-    for i in residual_snaps:
-
-        file_suffix = str(i).zfill(5)
+    for key in inputs:
+        data = loadmat(file, variable_names=key)
+        residual_input[key] = data[key][::interval_x, ::interval_y, residual_snaps]
+        del data
+        #residual_input[key] = op.normalize(residual_input[key], input_min_max[key][0], input_min_max[key][1])
         
-        # Dictionary to store the loaded data
-        residual_input = {}
-
-        # Iterate over the mapping and load each file
-        for key, value in inputs.items():
+        # Flatten and reshape to ensure it's a column vector
+        residual_input_tmp = residual_input[key].reshape(-1, residual_input[key].shape[2])
+        residual_input_tmp = np.transpose(residual_input_tmp)
+        residual_input_tmp = residual_input_tmp.reshape(-1, 1)
+    
+        # Concatenate the new array to the existing residual_input_train
+        if residual_input_train.size == 0:
+            residual_input_train = residual_input_tmp
+        else:
+            residual_input_train = np.hstack((residual_input_train, residual_input_tmp))
             
-            file_name = value["file"]
-            if key == 't':
-                data = np.full(X_test.shape, i*dt, dtype=np.float64)
-            elif key == 'x':
-                data = X_test
-            elif key == 'y':
-                data = Y_test
-            else:
-                fname = file_name if key == 'h' else f"{file_name}_{file_suffix}"    
-                file_path = os.path.join(folder, fname)
-                data = np.loadtxt(file_path)
-                data = data.round(3)
-
-            residual_input[key] = data[::interval_x, ::interval_y]
-            
-            # Normalize residual input data
-            residual_input[key] = op.normalize(residual_input[key], input_min_max[key][0], input_min_max[key][1])
-            
-        residual_input = np.column_stack([residual_input[key].flatten() for key in inputs])
-       
-        # Concatenate the new array to the existing residual_in_train
-        residual_input_train = np.vstack((residual_input_train, residual_input))
+    # Remove rows where one of the variables is NaN
+    mask = np.isnan(residual_input_train).any(axis=1)
+    residual_input_train = residual_input_train[~mask]
 
     # set up the pinn model
     model = pinn(fidelity_input_train, fidelity_true_train, residual_input_train)

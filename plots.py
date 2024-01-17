@@ -120,7 +120,7 @@ def plot_2lines(t, x, y, variable_true, variable_pred, config, var_name, v_min, 
     x_limits = config['plot']['x_limits']
     plot_folder = config['plot']['dir']
 
-    file_suffix = str(t).zfill(4)
+    file_suffix = "{:.3f}".format(t)
         
     # Plotting
     plt.figure(figsize=(10, 6))

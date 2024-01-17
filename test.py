@@ -1,9 +1,9 @@
 import torch
 import numpy as np
+from scipy.io import loadmat
 import json
-import os
 import sys
-from physics import Boussinesq_simple as physics_loss_calculator
+from physics import Navier_Stokes as physics_loss_calculator
 import plots
 import operations as op
 
@@ -17,11 +17,11 @@ class pinn:
         self.model = self.load_model()
         self.init_optimizers()
 
-        self.test_input_vars = config['data_residual']['inputs']
-        self.test_output_vars = config['data_residual']['outputs']
+        self.test_input_vars = config['data_test']['inputs']
+        self.test_output_vars = config['data_test']['outputs']
         
-        self.nx = config['numerical_model']['nx']
-        self.ny = config['numerical_model']['ny']
+        self.nx = config['data_test']['nx']
+        self.ny = config['data_test']['ny']
 
     def set_device(self):
         if torch.cuda.is_available():
@@ -53,38 +53,40 @@ class pinn:
             line_search_fn=self.config['lbfgs_optimizer']['line_search_fn']
         )
 
-    def test(self, test_input_data, test_true_data, file_no):
+    def test(self, test_input_data, test_true_data):
         test_input_data = torch.tensor(test_input_data).float().to(self.device)
         
         # temporal and spatial information for physics part
-        for i, (var_name, var_info) in enumerate(self.test_input_vars.items()):
+        for i, (key, info) in enumerate(self.test_input_vars.items()):
             tensor = test_input_data[:, i:i+1].clone().detach()
-            if "true" in var_info["requires_grad"]:
+            if "true" in info["requires_grad"]:
                 tensor = tensor.requires_grad_()
             tensor = tensor.float().to(self.device)
-            setattr(self, var_name, tensor)
+            setattr(self, key, tensor)
 
             # Clone the tensor to a new variable with the prefix 'plot_'
-            plot_tensor = tensor.clone().detach()  # Clone and detach the tensor
+            plot_tensor = tensor.clone().detach().cpu().numpy()
             plot_tensor = plot_tensor.reshape(self.ny, self.nx)
-            setattr(self, f'plot_input_{var_name}', plot_tensor)
-
+            #plot_tensor = op.denormalize(plot_tensor, input_min_max[key][0], input_min_max[key][1])
             
-        test_input_data = [getattr(self, var_name) for i, var_name in enumerate(self.test_input_vars)]
+            setattr(self, f'plot_input_{key}', plot_tensor)
+
+        test_input_data = [getattr(self, key) for i, key in enumerate(self.test_input_vars)]
 
         test_prediction_data = self.model(torch.cat(test_input_data, dim=-1))
 
-        for i, var_name in enumerate(self.test_output_vars):
+        for i, key in enumerate(self.test_output_vars):
+            
             tensor = test_prediction_data[:, i:i+1]
-            setattr(self, var_name, tensor)
+            setattr(self, key, tensor)
             # Clone the tensor to a new variable with the prefix
-            plot_tensor = tensor.clone().detach()  # Clone and detach the tensor
+            plot_tensor = tensor.clone().detach().cpu().numpy()
             plot_tensor = plot_tensor.reshape(self.ny, self.nx)
-            setattr(self, f'plot_pred_{var_name}', plot_tensor.cpu().numpy())
+            setattr(self, f'plot_pred_{key}', plot_tensor)
             
             # Convert the NumPy array to a PyTorch tensor, then clone and detach
-            tensor = torch.from_numpy(test_true_data[var_name]).clone().detach()
-            setattr(self, f'plot_true_{var_name}', tensor.cpu().numpy())
+            plot_tensor = torch.from_numpy(test_true_data[key]).clone().detach().cpu().numpy()
+            setattr(self, f'plot_true_{key}', plot_tensor)
 
         # Check if optimization is to be performed
         if self.config.get('perform_optimization', False):
@@ -102,14 +104,6 @@ class pinn:
                 test_prediction_data = self.model(torch.cat(test_input_data, dim=-1))
 
         test_prediction_data = test_prediction_data.detach().cpu().numpy()
-
-        # plots
-        x_min, x_max = config['numerical_model']['x_min'], config['numerical_model']['x_max']
-        y_min, y_max = config['numerical_model']['y_min'], config['numerical_model']['y_max'],
-        x = np.linspace(x_min, x_max, num=config['numerical_model']['nx']).astype(np.float64)
-        y = np.linspace(y_min, y_max, num=config['numerical_model']['ny']).astype(np.float64)
-        x_plot, y_plot = np.meshgrid(x, y)
-        t_plot = (file_no - 1) * dt * np.ones_like(x_plot)
         
         # plot exact and predicted currents
         #plots.plot_quiver(t_plot, x_plot, y_plot, self.plot_true_u, self.plot_true_v, self.plot_pred_u, self.plot_pred_v, self.config)
@@ -121,81 +115,76 @@ class pinn:
         #plots.plot_cmap_2column(t_plot, x_plot, y_plot, self.plot_true_z, self.plot_pred_z, self.config, 'eta', -1, 3)
         
         # plot comparison of 1d eta (cross-shore)
-        CS = 126
-        plots.plot_2lines(t_plot[CS,:], x_plot[CS,:], y_plot[CS,:], self.plot_true_z[CS,:], self.plot_pred_z[CS,:], self.config, 'eta', -1, 3, CS)
+        CS = 131
+        plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_z[CS,:], self.plot_pred_z[CS,:], self.config, 'eta', -0.5, 1.5, CS)
 
+        # plot comparison of 1d u (cross-shore)
+        plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_u[CS,:], self.plot_pred_u[CS,:], self.config, 'u', -3, 3, CS)
+        
+        # plot comparison of 1d v (cross-shore)
+        plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_v[CS,:], self.plot_pred_v[CS,:], self.config, 'v', -3, 3, CS)
+        
         # plot comparison of 1d depth (cross-shore)
-        plots.plot_2lines(t_plot[CS,:], x_plot[CS,:], y_plot[CS,:], -1* self.plot_true_h[CS,:], -1 * self.plot_pred_h[CS,:], self.config, 'depth', -9, 3, CS)
+        plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], -1*self.plot_true_h[CS,:], -1*self.plot_pred_h[CS,:], self.config, 'depth', -1, 0, CS)
 
-        return test_prediction_data
+        return
 
 if __name__ == "__main__":
     
     try:
-        with open('config.json', 'r') as f:
+        with open('config_CMB.json', 'r') as f:
             config = json.load(f)
     except Exception as e:
         print(f"Error reading config file: {e}")
         sys.exit(1)
 
-    model_path = config['test']['model_path']
-
-    folder = config['numerical_model']['dir']
-    x_min, x_max = config['numerical_model']['x_min'], config['numerical_model']['x_max']
-    y_min, y_max = config['numerical_model']['y_min'], config['numerical_model']['y_max']
-    dt = config['numerical_model']['dt']
-
-    num_files = config['numerical_model']['number_of_files']
-
+    model_path = config['data_test']['model']
     tester = pinn(model_path, config)
 
-    x = np.linspace(x_min, x_max, num=config['numerical_model']['nx']).astype(np.float64)
-    y = np.linspace(y_min, y_max, num=config['numerical_model']['ny']).astype(np.float64)
-    X_test, Y_test = np.meshgrid(x, y)
+    inputs = config['data_test']['inputs']
+    outputs = config['data_test']['outputs']
 
-    for file_no in range(200, num_files):
+    file = config['data_test']['file']
+
+    # Dictionary to store the loaded data
+    test_input_data = np.empty((0, 1))
+    test_input_dict = {}
+    test_true_dict = {}
+
+    for key in inputs:
+        data = loadmat(file, variable_names=key)
+        test_input_dict[key] = data[key]
+        del data
+    
+    input_min_max = op.get_min_max(test_input_dict, config)
+    #for key in inputs:
+        #test_input_dict[key] = op.normalize(test_input_dict[key], input_min_max[key][0], input_min_max[key][1])
+    
+    for key in outputs:
+        data = loadmat(file, variable_names=key)
+        test_true_dict[key] = data[key]
+        del data
         
-        file_suffix = str(file_no).zfill(5)
-
-        # Dictionary to store the loaded data
-        test_input_data = {}
-        test_true_data = {}
-
-        # Iterate over the mapping and load each file
-        for key, value in config['data_residual']['inputs'].items():
-            
-            file_name = value["file"]
-            if key == 'x':
-                data = X_test
-            elif key == 'y':
-                data = Y_test
-            elif key == 't':
-                data = np.full(X_test.shape, file_no*dt, dtype=np.float64)
+    for i in range(100,110):
+        test_input = np.empty((0, 1))
+        test_input_temp, test_input_flat = {}, {}
+        test_true = {}
+        
+        for key in inputs:
+            test_input_temp[key] = test_input_dict[key][:,:,i]
+            # Flatten and reshape to ensure it's a column vector
+            test_input_flat[key] = test_input_temp[key].reshape(-1, 1)
+            # Concatenate the new array
+            if test_input.size == 0:
+                test_input = test_input_flat[key]
             else:
-                fname = file_name if key == 'h' else f"{file_name}_{file_suffix}"    
-                file_path = os.path.join(folder, fname)
-                data = np.loadtxt(file_path)
-                
-            test_input_data[key] = data
+                test_input = np.hstack((test_input, test_input_flat[key]))
             
-        # min and max to normalize fidelity input data
-        input_min_max = op.get_min_max(test_input_data, config)
-        for key in config['data_residual']['inputs']:
-            test_input_data[key] = op.normalize(test_input_data[key], input_min_max[key][0], input_min_max[key][1])
-            
-        # Iterate over the mapping and load each file
-        for key, value in config['data_residual']['outputs'].items():
-            
-            file_name = value["file"]
-            fname = file_name if key == 'h' else f"{file_name}_{file_suffix}"
-            file_path = os.path.join(folder, fname)
-            data = np.loadtxt(file_path)
-
-            test_true_data[key] = data
-
-        test_input_data = np.column_stack([test_input_data[key].flatten() for key in config['data_residual']['inputs']])
+        for key in outputs:
+            test_true[key] = test_true_dict[key][:,:,i]        
         
-        test_outputs = tester.test(test_input_data, test_true_data, file_no)
-        print(f'Done: Prediction for file: {file_no}')
+        tester.test(test_input, test_true)
+        
+        print(f'Done: Prediction for timestep: {i}')
 
 
