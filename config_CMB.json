@@ -51,7 +51,7 @@
     },
 
     "data_test": {
-        "model": "../log/20240117_1149/model.pth",
+        "model": "../log/20240117_2313/model.pth",
         "file": "../data/G1a/processed/residual_input.mat",
         "inputs": {
             "t": {"requires_grad": ["true"]},
