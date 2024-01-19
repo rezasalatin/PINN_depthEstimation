@@ -106,26 +106,26 @@ class pinn:
         test_prediction_data = test_prediction_data.detach().cpu().numpy()
         
         # plot exact and predicted currents
-        #plots.plot_quiver(t_plot, x_plot, y_plot, self.plot_true_u, self.plot_true_v, self.plot_pred_u, self.plot_pred_v, self.config)
+        plots.plot_quiver(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_u, self.plot_true_v, self.plot_pred_u, self.plot_pred_v, self.config)
                 
         # plot prediction of water depth
-        #plots.plot_cmap(t_plot, x_plot, y_plot, self.plot_pred_h, self.config, 'depth', -1, 9)
+        plots.plot_cmap(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_pred_h, self.config, 'depth', -2, 1)
         
         # plot comparison of eta (true vs. prediction)
-        #plots.plot_cmap_2column(t_plot, x_plot, y_plot, self.plot_true_z, self.plot_pred_z, self.config, 'eta', -1, 3)
+        plots.plot_cmap_2column(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_z, self.plot_pred_z, self.config, 'eta', -1, 1)
         
         # plot comparison of 1d eta (cross-shore)
         CS = 131
-        plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_z[CS,:], self.plot_pred_z[CS,:], self.config, 'eta', -0.5, 1.5, CS)
+        #plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_z[CS,:], self.plot_pred_z[CS,:], self.config, 'eta', -0.5, 1.5, CS)
 
         # plot comparison of 1d u (cross-shore)
-        plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_u[CS,:], self.plot_pred_u[CS,:], self.config, 'u', -3, 3, CS)
+        #plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_u[CS,:], self.plot_pred_u[CS,:], self.config, 'u', -3, 3, CS)
         
         # plot comparison of 1d v (cross-shore)
-        plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_v[CS,:], self.plot_pred_v[CS,:], self.config, 'v', -3, 3, CS)
+        #plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_v[CS,:], self.plot_pred_v[CS,:], self.config, 'v', -3, 3, CS)
         
         # plot comparison of 1d depth (cross-shore)
-        plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], -1*self.plot_true_h[CS,:], -1*self.plot_pred_h[CS,:], self.config, 'depth', -1, 0, CS)
+        #plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], -1*self.plot_true_h[CS,:], -1*self.plot_pred_h[CS,:], self.config, 'depth', -1, 0, CS)
 
         return
 

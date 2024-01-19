@@ -54,7 +54,15 @@ class pinn():
         self.hidden_width = config['layers']['hidden_width']
         self.output_features = config['layers']['output_features']
         self.layers = [self.input_features] + [self.hidden_width] * self.hidden_layers + [self.output_features]
-        self.dnn = DNN(self.layers).to(device)
+
+        # Define dropout rate
+        self.dropout_rate = config['layers']['dropout_rate']
+
+        # Initialization method
+        self.init_type = config['layers']['init_type']
+
+        # Initialize DNN
+        self.dnn = DNN(self.layers, self.dropout_rate, self.init_type).to(device)
 
         # Initialize the optimizers
         self.init_optimizers()
@@ -80,6 +88,13 @@ class pinn():
             setattr(self, f'residual_input_{key}', torch.tensor(residual_input[:, i:i+1], requires_grad=requires_grad).float().to(device))
 
         self.residual_output_vars = config['data_residual']['outputs']
+        # Loss function weights
+        self.weight_fidelity = config['loss']['weight_fid_loss']
+        self.weight_residual = config['loss']['weight_res_loss']
+        for key in self.residual_output_vars:
+            setattr(self, f'weight_{key}', config['loss'][f'weight_{key}_loss'])
+
+
 
     # Initialize optimizers
     def init_optimizers(self):
@@ -122,7 +137,8 @@ class pinn():
         for i, key in enumerate(self.fidelity_output_vars):
             pred = predictions[:, i:i+1].to(device)
             true = getattr(self, f'fidelity_true_{key}')
-            fidelity_loss += torch.mean((true - pred)**2)
+            weight = getattr(self, f'weight_{key}')
+            fidelity_loss += weight * torch.mean((true - pred)**2)
         
         # Dynamic residual inputs
         inputs = [getattr(self, f'residual_input_{key}') for i, key in enumerate(self.residual_input_vars)]
@@ -138,9 +154,7 @@ class pinn():
         residual_loss = physics_loss_calculator(self.t, self.x, self.y, self.h, self.z, self.u, self.v)
             
         # Total loss
-        weight_fidelity = config['loss']['weight_fid_loss']
-        weight_residual = config['loss']['weight_res_loss']
-        loss = weight_fidelity * fidelity_loss + weight_residual * residual_loss
+        loss = self.weight_fidelity * fidelity_loss + self.weight_residual * residual_loss
                 
         # iteration (epoch) counter
         self.iter += 1

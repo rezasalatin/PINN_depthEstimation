@@ -3,7 +3,9 @@
         "input_features": 5,
         "hidden_layers": 10,
         "hidden_width": 10,
-        "output_features": 4
+        "output_features": 4,
+        "dropout_rate": 0.0,
+        "init_type": "xavier"
     },
     
     "adam_optimizer": {
@@ -24,6 +26,10 @@
     },
     
     "loss": {
+        "weight_h_loss": 1,
+        "weight_z_loss": 1,
+        "weight_u_loss": 1,
+        "weight_v_loss": 1,
         "weight_fid_loss": 1,
         "weight_res_loss": 1
     },
@@ -36,7 +42,7 @@
     },
 
     "data_residual": {
-        "file": "../data/G1a/processed/residual_input.mat",
+        "file": "../data/G1a/processed/residual_input_filtered.mat",
         "inputs": {
             "t": {"requires_grad": ["true"]},
             "x": {"requires_grad": ["true"]},

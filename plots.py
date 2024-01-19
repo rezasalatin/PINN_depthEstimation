@@ -84,7 +84,7 @@ def plot_cmap_2column(t, x, y, variable_true, variable_pred, config, var_name, v
     fig, axs = plt.subplots(1, 2, figsize=(12, 6))  # Two subplots side by side
     
     # First subplot for 'variable'
-    cmap1 = axs[0].pcolor(axis_x, axis_y, axis_z_true, shading='auto', vmin=v_min, vmax=v_max)
+    cmap1 = axs[0].pcolor(axis_x, axis_y, axis_z_true, shading='auto')
     cbar1 = fig.colorbar(cmap1, ax=axs[0])
     #cbar1.set_label(f'{var_name} (m)')
     axs[0].set_xlabel('X (m)', fontsize=font_size)
@@ -93,9 +93,9 @@ def plot_cmap_2column(t, x, y, variable_true, variable_pred, config, var_name, v
     axs[0].set_ylim(y_limits)
 
     # Second subplot for 'variable_true'
-    cmap2 = axs[1].pcolor(axis_x, axis_y, axis_z_pred, shading='auto', vmin=v_min, vmax=v_max)
+    cmap2 = axs[1].pcolor(axis_x, axis_y, axis_z_pred, shading='auto')
     cbar2 = fig.colorbar(cmap2, ax=axs[1])
-    cbar2.set_label(f'{var_name}_true (m)')
+    cbar2.set_label(f'{var_name} (m)')
     axs[1].set_xlabel('X (m)', fontsize=font_size)
     #axs[1].set_ylabel('Y (m)', fontsize=font_size)
     axs[1].set_xlim(x_limits)

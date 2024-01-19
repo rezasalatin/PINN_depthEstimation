@@ -46,7 +46,7 @@ def Navier_Stokes(t, x, y, h, z, u, v):
     Fbr_y = 3.0/16.0 * g * gamma_b**2 * h_y * (h + z)
 
     # loss with physics (Navier Stokes / Boussinesq etc)
-    fc = z_t + hu_x + hv_y                                      # continuity eq
+    fc = z_t + hu_x + hv_y                                   # continuity eq
     fm_x = u_t + u * u_x + v * u_y + g * z_x + Fs_x + Fbr_x  # momentum eq in X dir
     fm_y = v_t + u * v_x + v * v_y + g * z_y + Fs_y + Fbr_y  # momentum eq in Y dir
 
