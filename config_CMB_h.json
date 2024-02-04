@@ -1,9 +1,9 @@
 {
     "layers": {
         "input_features": 2,
-        "hidden_layers": 10,
-        "hidden_width": 10,
-        "output_features": 6,
+        "hidden_layers": 100,
+        "hidden_width": 20,
+        "output_features": 3,
         "dropout_rate": 0.0,
         "init_type": "xavier"
     },
@@ -26,43 +26,29 @@
     },
     
     "loss": {
-        "weight_h_loss": 1,
-        "weight_eta_mean_loss": 1,
-        "weight_U_loss": 1,
-        "weight_V_loss": 1,
-        "weight_k_loss": 1,
-        "weight_Hrms_loss": 1,
         "weight_fid_loss": 1,
         "weight_res_loss": 1
     },
     
-    "data_fidelity": {
-        "file": "../data/G1a/processed/input_fid.csv",
-        "inputs": ["x", "y"],
-        "outputs": ["h", "U", "V", "eta_mean", "Hrms", "k"],
-        "training_points": 12
-    },
-
-    "data_residual": {
-        "file": "../data/G1a/processed/input_res.mat",
+    "data": {
+        "file": "../data/G1a/processed/train_data.mat",
         "inputs": {
             "x": {"requires_grad": ["true"]},
             "y": {"requires_grad": ["true"]}
         },
-        "outputs": ["h", "U", "V", "eta_mean", "Hrms", "k"],
-        "snapshots": [1],
-        "interval_x": 10,
-        "interval_y": 10
+        "trues": ["U", "V"],
+        "unknowns": ["h"],
+        "training_points": 100
     },
 
     "data_test": {
-        "model": "../log/20240201_1043/model.pth",
-        "file": "../data/G1a/processed/input_res.mat",
+        "model": "../log/20240202_1126/model.pth",
+        "file": "../data/G1a/processed/train_data.mat",
         "inputs": {
             "x": {"requires_grad": ["true"]},
             "y": {"requires_grad": ["true"]}
         },
-        "outputs": ["h", "U", "V", "eta_mean", "Hrms", "k"],
+        "outputs": ["U", "V", "h"],
         "nx": 81,
         "ny": 261,
         "dx": 0.1,

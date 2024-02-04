@@ -67,7 +67,7 @@ class pinn:
             # Clone the tensor to a new variable with the prefix 'plot_'
             plot_tensor = tensor.clone().detach().cpu().numpy()
             plot_tensor = plot_tensor.reshape(self.ny, self.nx)
-            #plot_tensor = op.denormalize(plot_tensor, input_min_max[key][0], input_min_max[key][1])
+            plot_tensor = op.denormalize(plot_tensor, input_min_max[key][0], input_min_max[key][1])
             
             setattr(self, f'plot_input_{key}', plot_tensor)
 
@@ -105,17 +105,19 @@ class pinn:
 
         test_prediction_data = test_prediction_data.detach().cpu().numpy()
         
+        
+        
         # plot exact and predicted currents
-        plots.plot_quiver(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_u, self.plot_true_v, self.plot_pred_u, self.plot_pred_v, self.config)
+        #plots.plot_quiver(self.plot_input_x, self.plot_input_y, self.plot_true_U, self.plot_true_V, self.plot_pred_U, self.plot_pred_V, self.config)
                 
         # plot prediction of water depth
-        plots.plot_cmap(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_pred_h, self.config, 'depth', -2, 1)
+        #plots.plot_cmap(self.plot_input_x, self.plot_input_y, self.plot_pred_h, self.config, 'depth', -2, 1)
         
         # plot comparison of eta (true vs. prediction)
-        plots.plot_cmap_2column(self.plot_input_t, self.plot_input_x, self.plot_input_y, self.plot_true_z, self.plot_pred_z, self.config, 'eta', -1, 1)
+        #plots.plot_cmap_2column(self.plot_input_x, self.plot_input_y, self.plot_true_eta_mean, self.plot_pred_eta_mean, self.config, 'eta', -1, 1)
         
         # plot comparison of 1d eta (cross-shore)
-        CS = 131
+        #CS = 131
         #plots.plot_2lines(self.plot_input_t[CS,:], self.plot_input_x[CS,:], self.plot_input_y[CS,:], self.plot_true_z[CS,:], self.plot_pred_z[CS,:], self.config, 'eta', -0.5, 1.5, CS)
 
         # plot comparison of 1d u (cross-shore)
@@ -157,8 +159,8 @@ if __name__ == "__main__":
         del data
     
     input_min_max = op.get_min_max(test_input_dict, config)
-    #for key in inputs:
-        #test_input_dict[key] = op.normalize(test_input_dict[key], input_min_max[key][0], input_min_max[key][1])
+    for key in inputs:
+        test_input_dict[key] = op.normalize(test_input_dict[key], input_min_max[key][0], input_min_max[key][1])
     
     for key in outputs:
         data = loadmat(file, variable_names=key)
@@ -171,7 +173,7 @@ if __name__ == "__main__":
         test_true = {}
         
         for key in inputs:
-            test_input_temp[key] = test_input_dict[key][:,:,i]
+            test_input_temp[key] = test_input_dict[key][:,:]
             # Flatten and reshape to ensure it's a column vector
             test_input_flat[key] = test_input_temp[key].reshape(-1, 1)
             # Concatenate the new array
@@ -181,7 +183,7 @@ if __name__ == "__main__":
                 test_input = np.hstack((test_input, test_input_flat[key]))
             
         for key in outputs:
-            test_true[key] = test_true_dict[key][:,:,i]        
+            test_true[key] = test_true_dict[key][:,:]        
         
         tester.test(test_input, test_true)
         

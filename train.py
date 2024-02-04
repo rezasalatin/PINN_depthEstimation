@@ -14,7 +14,7 @@ import time
 import datetime
 import os
 import json
-from physics import Navier_Stokes as physics_loss_calculator
+from physics import physics_equation as physics_loss_calculator
 import operations as op
 from dnn import DNN
 import plots
@@ -151,7 +151,7 @@ class pinn():
             
         #self.z_pred = self.z.clone().detach().cpu().numpy()
                     
-        residual_loss = physics_loss_calculator(self.t, self.x, self.y, self.h, self.z, self.u, self.v)
+        residual_loss = physics_loss_calculator(self.x, self.y, self.h, self.U, self.V, self.eta_mean, self.Hrms, self.k)
             
         # Total loss
         loss = self.weight_fidelity * fidelity_loss + self.weight_residual * residual_loss
@@ -172,7 +172,7 @@ class pinn():
         with open(log_file_path, 'a') as log_file:
             log_file.write(log_values)
         
-        if self.iter % 100 == 0:
+        if self.iter % 1000 == 0:
             # Print the log values
             print(f'Epoch {self.iter}, Fidelity Loss: {fidelity_loss.item():.5e}, Residual Loss: {residual_loss.item():.5e}, Total Loss: {loss.item():.5e}')
             # Save the trained model
@@ -206,12 +206,13 @@ if __name__ == "__main__":
     ########### Data for Fidelity ###########
     #########################################
     
-    file = config['data_fidelity']['file']             # Data directory
+    file = config['data_fidelity']['file']              # Data directory
     inputs = config['data_fidelity']['inputs']          # List of input variable names
     outputs = config['data_fidelity']['outputs']        # List of exact/output variable names
 
     # Create dictionaries for input and output data columns
     fidelity_input, fidelity_true = {}, {}
+
     # Extract all data from csv file.
     data = pd.read_csv(file)
     data = data.round(3)
@@ -225,8 +226,8 @@ if __name__ == "__main__":
 
     # min and max to normalize fidelity input data
     input_min_max = op.get_min_max(fidelity_input, config)
-    #for key in fidelity_input:
-    #    fidelity_input[key] = op.normalize(fidelity_input[key], input_min_max[key][0], input_min_max[key][1])
+    for key in fidelity_input:
+        fidelity_input[key] = op.normalize(fidelity_input[key], input_min_max[key][0], input_min_max[key][1])
 
     # Single NumPy array from dictionaries
     fidelity_input = np.column_stack([fidelity_input[key] for key in inputs])
@@ -255,12 +256,13 @@ if __name__ == "__main__":
 
     for key in inputs:
         data = loadmat(file, variable_names=key)
-        residual_input[key] = data[key][::interval_x, ::interval_y, residual_snaps]
+        #residual_input[key] = data[key][::interval_x, ::interval_y, residual_snaps]
+        residual_input[key] = data[key][::interval_x, ::interval_y]
         del data
-        #residual_input[key] = op.normalize(residual_input[key], input_min_max[key][0], input_min_max[key][1])
+        residual_input[key] = op.normalize(residual_input[key], input_min_max[key][0], input_min_max[key][1])
         
         # Flatten and reshape to ensure it's a column vector
-        residual_input_tmp = residual_input[key].reshape(-1, residual_input[key].shape[2])
+        residual_input_tmp = residual_input[key].reshape(-1, residual_input[key].shape[1])
         residual_input_tmp = np.transpose(residual_input_tmp)
         residual_input_tmp = residual_input_tmp.reshape(-1, 1)
     
