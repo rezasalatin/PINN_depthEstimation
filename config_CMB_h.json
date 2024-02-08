@@ -24,26 +24,25 @@
         "tolerance_change": 1e-7,
         "line_search_fn": "strong_wolfe"
     },
-    
+
     "loss": {
         "weight_fid_loss": 1,
         "weight_res_loss": 1
     },
     
     "data": {
-        "file": "../data/G1a/processed/train_data.mat",
+        "file": "../data/G1a/processed/data_60percent.mat",
         "inputs": {
             "x": {"requires_grad": ["true"]},
             "y": {"requires_grad": ["true"]}
         },
         "trues": ["U", "V"],
-        "unknowns": ["h"],
-        "training_points": 100
-    },
+        "unknowns": ["h"]
+        },
 
     "data_test": {
-        "model": "../log/20240202_1126/model.pth",
-        "file": "../data/G1a/processed/train_data.mat",
+        "model": "../log/20240206_1546/model_10000.pth",
+        "file": "../data/G1a/processed/data_100percent.mat",
         "inputs": {
             "x": {"requires_grad": ["true"]},
             "y": {"requires_grad": ["true"]}

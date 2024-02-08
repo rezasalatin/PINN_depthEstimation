@@ -15,6 +15,38 @@ def compute_gradient(pred, var):
     return grad
 
 ###########################################################
+def continuity_only(x, y, h, U, V):
+
+    hU_x, hV_y = compute_gradient(h*U, x), compute_gradient(h*V, y)
+
+    # Continuity equation loss
+    fc = hU_x + hV_y
+    loss_continuity = torch.mean(fc**2)
+
+    # Additional condition 1: h = 0.7 when x = 25
+    idx = torch.where(x < 25.5)
+    loss_condition = torch.mean((h[idx] - 0.75)**2)
+
+    # Total loss
+    loss = loss_continuity + loss_condition
+
+    return loss
+
+
+###########################################################
+def continuity_ftemp(x, y, h, U, V):
+    
+    hU_x, hV_y = compute_gradient(h*U, x), compute_gradient(h*V, y)
+
+    # loss with physics
+    fc = hU_x + hV_y  # continuity eq
+    
+    # loss
+    loss = torch.mean(fc**2)
+
+    return loss
+
+###########################################################
 def Navier_Stokes(t, x, y, h, z, u, v):
     
     u_t = compute_gradient(u, t)
@@ -87,15 +119,3 @@ def physics_equation(x, y, h, U, V, eta_mean, Hrms, k):
 
     return loss
 
-###########################################################
-def continuity_only(x, y, h, U, V):
-    
-    hU_x, hV_y = compute_gradient(h*U, x), compute_gradient(h*V, y)
-
-    # loss with physics
-    fc = hU_x + hV_y  # continuity eq
-
-    # loss
-    loss = torch.mean(fc**2)
-
-    return loss

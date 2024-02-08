@@ -7,6 +7,7 @@ w/ Pytorch
 """
 
 import torch
+import torch.nn.functional as F
 import numpy as np
 import scipy.io as sio
 from scipy.io import loadmat
@@ -93,7 +94,7 @@ class pinn():
         # Adam optimizer
         self.optimizer_Adam = torch.optim.Adam(
             self.dnn.parameters(), 
-            lr = config['adam_optimizer']['learning_rate'], # learning rate
+            lr = config['adam_optimizer']['learning_rate']
         )
 
         # Define learning rate scheduler for Adam
@@ -129,7 +130,7 @@ class pinn():
         for i, key in enumerate(self.true_vars):
             pred = predictions[:, i:i+1].to(device)
             true = getattr(self, f'true_{key}')
-            fidelity_loss += torch.mean((true - pred)**2)
+            fidelity_loss += F.mse_loss(pred, true)
         
         # Residual loss
         for i, key in enumerate(self.true_vars):
@@ -137,7 +138,7 @@ class pinn():
         for j, key in enumerate(self.unknown_vars):
             setattr(self, f'pred_{key}', predictions[:, j+i+1:j+i+2])
             
-        if self.iter == 49000:
+        if self.iter == 50000:
             # Create a dictionary to store the pred_key values
             data_to_save = {}
             for key in self.true_vars + self.unknown_vars:
@@ -177,7 +178,7 @@ class pinn():
             # Print the log values
             print(f'Epoch {self.iter}, Fidelity Loss: {fidelity_loss.item():.5e}, Residual Loss: {residual_loss.item():.5e}, Total Loss: {loss.item():.5e}')
             
-        if self.iter <= 40000:
+        if self.iter <= 45000:
             if self.iter % 10000 == 0:
                 # Save the trained model
                 torch.save(self.dnn, os.path.join(log_dir, f'model_{self.iter}.pth'))
